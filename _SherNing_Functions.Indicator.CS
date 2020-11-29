@@ -140,8 +140,8 @@ namespace PowerLanguage.Indicator
         // Contact      : sherning@hotmail.com
         //=========================================================================================
         // References   :       
-        // Obectives    : 
-        // Remarks      :
+        // Obectives    : Framework for building and testing functions
+        // Remarks      : Use this framework to build and test functions
         //=========================================================================================
 
         /*/
