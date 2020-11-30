@@ -119,6 +119,47 @@ namespace PowerLanguage.Indicator
             return sum / list.Count;
         }
 
+        public double[] RegressionLine(double[,] table)
+        {
+            if (table.Rank != 2) return null;
+
+            // return y = mx + b, [m,b]
+            double[] results = new double[2];
+
+            // table col = rank. two dimension, rank = 2
+            int rows = table.Length / table.Rank;
+
+            // get sum(x) is the sum of all x-values
+            double sumX = 0;
+            for (int i = 0; i < rows; i++)
+                sumX += table[i, 0];
+
+            // get sum(y) is the sum of all y-values
+            double sumY = 0;
+            for (int i = 0; i < rows; i++)
+                sumY += table[i, 1];
+
+            // get sum(xy) is the sum of the product of x and y
+            double sumXY = 0;
+            for (int i = 0; i < rows; i++)
+                sumXY += table[i, 0] * table[i, 1];
+
+            // get sum(x^2) is the sum of x^2
+            double sumX2 = 0;
+            for (int i = 0; i < rows; i++)
+                sumX2 += Math.Pow(table[i, 0], 2);
+
+            // calculate output values
+            double m = ((rows * sumXY) - (sumX * sumY)) / ((rows * sumX2) - Math.Pow(sumX, 2));
+            double b = (sumY - (m * sumX)) / rows;
+
+            // cache and return output values
+            results[0] = m;
+            results[1] = b;
+
+            return results;
+        }
+
         protected override string CalcBar()
         {
             return "Does not return any value";
@@ -126,7 +167,7 @@ namespace PowerLanguage.Indicator
     }
 
     public class _SherNing_Functions : IndicatorObject
-    { 
+    {
         //================================= Project Documentation =================================
         // Project Name : Function Library
         // Platform     : Multicharts
@@ -186,10 +227,58 @@ namespace PowerLanguage.Indicator
 
         protected override void StartCalc()
         {
-            
+           
         }
         protected override void CalcBar()
         {
+            if (Bars.CurrentBar == 2)
+            {
+                // currentbar == 1 called twice.
+
+                double[,] table = new double[12, 2];
+
+                for (int i = 0; i < 12; i++)
+                    table[i, 0] = i + 1;
+
+                double[] values = new double[]
+                {
+                   25,38,29,115,82,114,120,160,153,190,239,175
+                };
+
+                for (int i = 0; i < 12; i++)
+                    table[i, 1] = values[i];
+
+                for (int i = 0; i < 12; i++)
+                {
+                    Print("[ " + table[i, 0] + " , " + table[i, 1] + " ]");
+                }
+
+                double[] results = Stats.RegressionLine(table);
+                Print("m: " + results[0]);
+                Print("b: " + results[1]);
+
+                table = new double[7, 2];
+
+                for (int i = 0; i < 7; i++)
+                    table[i, 0] = i * 2;
+
+                values = new double[]
+                {
+                   0.8,1.0,0.2,0.2,2.0,0.8,0.6
+                };
+
+                for (int i = 0; i < 7; i++)
+                    table[i, 1] = values[i];
+
+                results = Stats.RegressionLine(table);
+
+                Print("m: " + results[0]);
+                Print("b: " + results[1]);
+
+            }
+
+
+
             double highestPrice = DevTool.HighestPrice(Bars.High, 3);
             double highestHigh = Bars.High.Highest(3);
 
