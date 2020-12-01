@@ -157,13 +157,122 @@ namespace PowerLanguage.Indicator
             results[0] = m;
             results[1] = b;
 
+            string equation = string.Format("y = {0}x + {1} ", m, b);
+            Print(equation);
+
             return results;
+        }
+
+        public double CorrelationCoefficient(double[,] table)
+        {
+            if (table.Rank != 2) return 0;
+
+            // table col = rank. two dimension, rank = 2
+            int rows = table.Length / table.Rank;
+
+            double xBar = 0;
+            for (int i = 0; i < rows; i++)
+                xBar += table[i, 0];
+
+            xBar /= rows;
+
+            double yBar = 0;
+            for (int i = 0; i < rows; i++)
+                yBar += table[i, 1];
+
+            yBar /= rows;
+             
+            // cache value for std dev calculation
+            double[] xiMinusxBarArr = new double[rows];
+
+            for (int i = 0; i < rows; i++)
+            {
+                double val = table[i, 0] - xBar;
+                xiMinusxBarArr[i] = val;
+            }
+
+            double[] yiMinusyBarArr = new double[rows];
+
+            for (int i = 0; i < rows; i++)
+            {
+                double val = table[i, 1] - yBar;
+                yiMinusyBarArr[i] = val;
+            }
+
+            double stdDevX = 0;
+            for (int i = 0; i < rows; i++)
+                stdDevX += Math.Pow(xiMinusxBarArr[i], 2);
+
+            // sample std dev n - 1
+            stdDevX = Math.Sqrt(stdDevX / (rows - 1 ));
+
+            double stdDevY = 0;
+            for (int i = 0; i < rows; i++)
+                stdDevY += Math.Pow(yiMinusyBarArr[i], 2);
+
+            stdDevY = Math.Sqrt(stdDevY / (rows - 1));
+
+            // calculate correlation r value
+            double r = 0;
+            for (int i = 0; i < rows; i++)
+                r += (xiMinusxBarArr[i] / stdDevX) * (yiMinusyBarArr[i] / stdDevY);
+
+            // 1 / (n - 1)
+            r /= (rows - 1);
+
+            return r;
+        }
+
+        public double RootMeanSqrError(double[,] table)
+        {
+            double[] data = RegressionLine(table);
+
+            double m = data[0];
+            double b = data[1];
+
+            int dataPoints = table.Length / table.Rank;
+
+            double[] forecast = new double[dataPoints];
+
+            for (int i = 0; i < dataPoints; i++)
+                forecast[i] = (m * table[i, 0]) + b;
+
+            double[] residual = new double[dataPoints];
+            for (int i = 0; i < dataPoints; i++)
+                residual[i] = Math.Pow(table[i, 1] - forecast[i], 2);
+
+            double residualSum = 0;
+            for (int i = 0; i < dataPoints; i++)
+                residualSum += residual[i];
+
+            double rmse = Math.Sqrt(residualSum / (dataPoints - 1));
+            Print("rmse: " + rmse);
+            return rmse;
         }
 
         protected override string CalcBar()
         {
             return "Does not return any value";
         }
+
+        #region Print Functions
+        private bool DebugMode = true;
+        private void Print(string message)
+        {
+            // print messages if debug mode == true.
+            if (DebugMode == false) return;
+
+            // Print who is calling Print()
+            StackTrace stackTrace = new StackTrace();
+
+            Output.WriteLine("Project:  {0}   |   Caller:  {1}   |   Bar Time:  {2}   |   Message:  {3}",
+                Name,
+                stackTrace.GetFrame(1).GetMethod().Name,
+                Bars.TimeValue.ToString("dd-MM-yy HH:mm:ss tt"),
+                message);
+        }
+        #endregion
+
     }
 
     public class _SherNing_Functions : IndicatorObject
@@ -234,47 +343,8 @@ namespace PowerLanguage.Indicator
             if (Bars.CurrentBar == 2)
             {
                 // currentbar == 1 called twice.
-
-                double[,] table = new double[12, 2];
-
-                for (int i = 0; i < 12; i++)
-                    table[i, 0] = i + 1;
-
-                double[] values = new double[]
-                {
-                   25,38,29,115,82,114,120,160,153,190,239,175
-                };
-
-                for (int i = 0; i < 12; i++)
-                    table[i, 1] = values[i];
-
-                for (int i = 0; i < 12; i++)
-                {
-                    Print("[ " + table[i, 0] + " , " + table[i, 1] + " ]");
-                }
-
-                double[] results = Stats.RegressionLine(table);
-                Print("m: " + results[0]);
-                Print("b: " + results[1]);
-
-                table = new double[7, 2];
-
-                for (int i = 0; i < 7; i++)
-                    table[i, 0] = i * 2;
-
-                values = new double[]
-                {
-                   0.8,1.0,0.2,0.2,2.0,0.8,0.6
-                };
-
-                for (int i = 0; i < 7; i++)
-                    table[i, 1] = values[i];
-
-                results = Stats.RegressionLine(table);
-
-                Print("m: " + results[0]);
-                Print("b: " + results[1]);
-
+                Test1();
+                
             }
 
 
@@ -284,6 +354,60 @@ namespace PowerLanguage.Indicator
 
             Plot[1].Set(highestPrice);
             Plot[2].Set(highestHigh);
+        }
+
+        private void Test2()
+        {
+            double[,] table = new double[7, 2];
+
+            for (int i = 0; i < 7; i++)
+                table[i, 0] = i * 2;
+
+            double[] values = new double[]
+            {
+                0.8,1.0,0.2,0.2,2.0,0.8,0.6
+            };
+
+            for (int i = 0; i < 7; i++)
+                table[i, 1] = values[i];
+
+            for (int i = 0; i < 7; i++)
+            {
+                Print("[ " + table[i, 0] + " , " + table[i, 1] + " ]");
+            }
+
+            double r = Stats.CorrelationCoefficient(table);
+            Print("R: " + r);
+        }
+
+        private void Test1()
+        {
+            double[,] table = new double[12, 2];
+
+            for (int i = 0; i < 12; i++)
+                table[i, 0] = i + 1;
+
+            double[] values = new double[]
+            {
+                   25,38,29,115,82,114,120,160,153,190,239,175
+            };
+
+            for (int i = 0; i < 12; i++)
+                table[i, 1] = values[i];
+
+            for (int i = 0; i < 12; i++)
+            {
+                Print("[ " + table[i, 0] + " , " + table[i, 1] + " ]");
+            }
+
+            double[] results = Stats.RegressionLine(table);
+            Print("m: " + results[0]);
+            Print("b: " + results[1]);
+
+            double result = Stats.CorrelationCoefficient(table);
+            Print("Correlation r: " + result);
+
+            double rmse = Stats.RootMeanSqrError(table);
         }
 
         #region Print Functions
