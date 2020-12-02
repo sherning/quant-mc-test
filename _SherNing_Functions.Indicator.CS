@@ -150,7 +150,9 @@ namespace PowerLanguage.Indicator
                 sumX2 += Math.Pow(table[i, 0], 2);
 
             // calculate output values
-            double m = ((rows * sumXY) - (sumX * sumY)) / ((rows * sumX2) - Math.Pow(sumX, 2));
+            double m = ((rows * sumXY) - (sumX * sumY))
+                / ((rows * sumX2) - Math.Pow(sumX, 2));
+
             double b = (sumY - (m * sumX)) / rows;
 
             // cache and return output values
@@ -158,7 +160,7 @@ namespace PowerLanguage.Indicator
             results[1] = b;
 
             string equation = string.Format("y = {0}x + {1} ", m, b);
-            Print(equation);
+            //Print(equation);
 
             return results;
         }
@@ -181,7 +183,7 @@ namespace PowerLanguage.Indicator
                 yBar += table[i, 1];
 
             yBar /= rows;
-             
+
             // cache value for std dev calculation
             double[] xiMinusxBarArr = new double[rows];
 
@@ -204,7 +206,7 @@ namespace PowerLanguage.Indicator
                 stdDevX += Math.Pow(xiMinusxBarArr[i], 2);
 
             // sample std dev n - 1
-            stdDevX = Math.Sqrt(stdDevX / (rows - 1 ));
+            stdDevX = Math.Sqrt(stdDevX / (rows - 1));
 
             double stdDevY = 0;
             for (int i = 0; i < rows; i++)
@@ -246,8 +248,70 @@ namespace PowerLanguage.Indicator
                 residualSum += residual[i];
 
             double rmse = Math.Sqrt(residualSum / (dataPoints - 1));
-            Print("rmse: " + rmse);
             return rmse;
+        }
+
+        public double CoefficientOfDetermination(double[,] table)
+        {
+            // How much or what percentage of the total variation in y is described
+            // by the variation in x ?
+
+            // get data from Regression Line
+            double[] data = RegressionLine(table);
+
+            double m = data[0];
+            double b = data[1];
+
+            int dataPoints = table.Length / table.Rank;
+
+            // corresponding y value for each x, on the regression line
+            double[] yValue = new double[dataPoints];
+            for (int i = 0; i < dataPoints; i++)
+                yValue[i] = (m * table[i, 0]) + b;
+
+            // sqaured distance of the y to the regression line
+            double[] sqrError = new double[dataPoints];
+            for (int i = 0; i < dataPoints; i++)
+                sqrError[i] = Math.Pow(table[i, 1] - yValue[i], 2);
+
+            // y mean
+            double yMean = 0;
+            for (int i = 0; i < dataPoints; i++)
+                yMean += table[i, 1];
+
+            yMean /= dataPoints;
+
+            // y - yMean
+            double[] sqrDistanceFromMean = new double[dataPoints];
+            for (int i = 0; i < dataPoints; i++)
+                sqrDistanceFromMean[i] = Math.Pow(table[i, 1] - yMean, 2);
+
+            // totals 
+            double totalSqrError = 0;
+            for (int i = 0; i < dataPoints; i++)
+                totalSqrError += sqrError[i];
+
+            double totalSqrDistanceFromMean = 0;
+            for (int i = 0; i < dataPoints; i++)
+                totalSqrDistanceFromMean += sqrDistanceFromMean[i];
+
+            // % of total variation which is explained by regression line.
+            return 1 - (totalSqrError / totalSqrDistanceFromMean);
+        }
+
+        public double ChiSquareTest(double[] observed, double[] expected)
+        {
+            // the data is the actual quantity, and not the proportion
+
+            // check if arrays are of equal lengths
+            if (observed.Length != expected.Length) return 0;
+
+            double chiStatistic = 0;
+            for (int i = 0; i < observed.Length; i++)
+                chiStatistic +=
+                    Math.Pow(observed[i] - expected[i], 2) / expected[i];
+
+            return chiStatistic;
         }
 
         protected override string CalcBar()
@@ -336,15 +400,15 @@ namespace PowerLanguage.Indicator
 
         protected override void StartCalc()
         {
-           
+
         }
         protected override void CalcBar()
         {
             if (Bars.CurrentBar == 2)
             {
                 // currentbar == 1 called twice.
-                Test1();
-                
+                Test4();
+
             }
 
 
@@ -354,6 +418,36 @@ namespace PowerLanguage.Indicator
 
             Plot[1].Set(highestPrice);
             Plot[2].Set(highestHigh);
+        }
+
+        private void Test4()
+        {
+            double[] observed = new double[]
+            {
+               30,14,34,45,57,20
+            };
+
+            double[] expected = new double[]
+            {
+                20,20,30,40,60,30
+            };
+
+            double chi = Stats.ChiSquareTest(observed, expected);
+
+            Print("Chi: " + chi);
+        }
+        private void Test3()
+        {
+            double[,] table = new double[4, 2]
+            {
+                {-2,-3 },
+                {-1,-1 },
+                {1, 2 },
+                {4, 3 }
+            };
+
+            double rSqr = Stats.CoefficientOfDetermination(table);
+            Print("" + rSqr);
         }
 
         private void Test2()
@@ -389,7 +483,7 @@ namespace PowerLanguage.Indicator
 
             double[] values = new double[]
             {
-                   25,38,29,115,82,114,120,160,153,190,239,175
+                 25,38,29,115,82,114,120,160,153,190,239,175
             };
 
             for (int i = 0; i < 12; i++)
