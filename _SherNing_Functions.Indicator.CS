@@ -94,6 +94,21 @@ namespace PowerLanguage.Indicator
             return Math.Sqrt(variance);
         }
 
+        public double SampleStandardDeviation(double[] dataSet)
+        {
+            double mean = Mean(dataSet);
+
+            double variance = 0;
+
+            for (int i = 0; i < dataSet.Length; i++)
+                variance += Math.Pow((dataSet[i] - mean), 2);
+
+            // sample std dev is n - 1
+            variance /= dataSet.Length - 1;
+
+            return Math.Sqrt(variance);
+        }
+
         public double StandardDeviation(List<double> list)
         {
             double mean = Mean(list);
@@ -117,6 +132,17 @@ namespace PowerLanguage.Indicator
                 sum += list[i];
 
             return sum / list.Count;
+        }
+
+        public double Mean(double[] dataSet)
+        {
+            if (dataSet.Length <= 0) return 0;
+
+            double mean = 0;
+            for (int i = 0; i < dataSet.Length; i++)
+                mean += dataSet[i];
+
+            return mean / dataSet.Length;
         }
 
         public double[] RegressionLine(double[,] table)
@@ -225,6 +251,42 @@ namespace PowerLanguage.Indicator
             return r;
         }
 
+        public double CorrelationCoefficient(double[] set1, double[] set2)
+        {
+            if (set1.Length != set2.Length) return 0;
+
+            double set1Mean = Mean(set1);
+            double set2Mean = Mean(set2);
+
+            int length = set1.Length;
+
+            // cache value for std dev calculation
+            double[] xiMinusxBarArr = new double[length];
+
+            for (int i = 0; i < length; i++)
+                xiMinusxBarArr[i] = set1[i] - set1Mean;
+
+            double[] yiMinusyBarArr = new double[length];
+
+            for (int i = 0; i < length; i++)
+                yiMinusyBarArr[i] = set2[i] - set2Mean;
+
+            double stdDevX = SampleStandardDeviation(set1);
+            double stdDevY = SampleStandardDeviation(set2);
+
+            // calculate correlation r value
+            double r = 0;
+            for (int i = 0; i < length; i++)
+                r += (xiMinusxBarArr[i] / stdDevX) * (yiMinusyBarArr[i] / stdDevY);
+
+            // 1 / (n - 1)
+            r /= length - 1;
+
+            // provides direction and strength
+            // r = Covariance(set1, set2) / (stdDevX * stdDevY))
+            return r;
+        }
+
         public double RootMeanSqrError(double[,] table)
         {
             double[] data = RegressionLine(table);
@@ -312,6 +374,82 @@ namespace PowerLanguage.Indicator
                     Math.Pow(observed[i] - expected[i], 2) / expected[i];
 
             return chiStatistic;
+        }
+
+        public double ChiSquareContigency(double[] firstSet, double[] secondSet)
+        {
+            // check
+            if (firstSet.Length != secondSet.Length) return 0;
+
+            double set1Total = 0;
+            for (int i = 0; i < firstSet.Length; i++)
+                set1Total += firstSet[i];
+
+            double set2Total = 0;
+            for (int i = 0; i < secondSet.Length; i++)
+                set2Total += secondSet[i];
+
+            double[] subTotal = new double[firstSet.Length];
+
+            for (int i = 0; i < firstSet.Length; i++)
+                subTotal[i] = firstSet[i] + secondSet[i];
+           
+            double total = set1Total + set2Total;
+
+            double firstSetPercent = set1Total / total;
+            double secondSetPercent = set2Total / total;
+
+            double[] expected = new double[firstSet.Length * 2];
+            double[] observed = new double[firstSet.Length * 2];
+
+            for (int i = 0; i < subTotal.Length; i++)
+            {
+                expected[i] = subTotal[i] * firstSetPercent;
+                expected[i + subTotal.Length] = subTotal[i] * secondSetPercent;
+            }
+
+            for (int i = 0; i < subTotal.Length; i++)
+            {
+                observed[i] = firstSet[i];
+                observed[i + subTotal.Length] = secondSet[i];
+            }
+
+            // (rows - 1) * ( cols - 1)
+            int degreesOfFreedom = (2 - 1) * (firstSet.Length - 1);
+
+            return ChiSquareTest(observed, expected);
+        }
+
+        public double Covariance(double[] set1, double[] set2)
+        {
+            if (set1.Length != set2.Length) return 0;
+            
+            int length = set1.Length;
+
+            double set1Mean = Mean(set1);
+            double set2Mean = Mean(set2);
+
+            double covariance = 0;
+            for (int i = 0; i < length; i++)
+                covariance += (set1[i] - set1Mean) * (set2[i] - set2Mean);
+
+            // Sample => n - 1
+            covariance /= length - 1;
+
+            // covariance only measures the direction and not strength
+            return covariance;
+        }
+
+        public double[] GetArray(params double[] dataset)
+        {
+            if (dataset.Length <= 0) return null;
+
+            double[] arr = new double[dataset.Length];
+
+            for (int i = 0; i < dataset.Length; i++)
+                arr[i] = dataset[i];
+
+            return arr;
         }
 
         protected override string CalcBar()
@@ -407,11 +545,8 @@ namespace PowerLanguage.Indicator
             if (Bars.CurrentBar == 2)
             {
                 // currentbar == 1 called twice.
-                Test4();
-
+                Test2();
             }
-
-
 
             double highestPrice = DevTool.HighestPrice(Bars.High, 3);
             double highestHigh = Bars.High.Highest(3);
@@ -420,88 +555,12 @@ namespace PowerLanguage.Indicator
             Plot[2].Set(highestHigh);
         }
 
-        private void Test4()
-        {
-            double[] observed = new double[]
-            {
-               30,14,34,45,57,20
-            };
-
-            double[] expected = new double[]
-            {
-                20,20,30,40,60,30
-            };
-
-            double chi = Stats.ChiSquareTest(observed, expected);
-
-            Print("Chi: " + chi);
-        }
-        private void Test3()
-        {
-            double[,] table = new double[4, 2]
-            {
-                {-2,-3 },
-                {-1,-1 },
-                {1, 2 },
-                {4, 3 }
-            };
-
-            double rSqr = Stats.CoefficientOfDetermination(table);
-            Print("" + rSqr);
-        }
-
         private void Test2()
         {
-            double[,] table = new double[7, 2];
-
-            for (int i = 0; i < 7; i++)
-                table[i, 0] = i * 2;
-
-            double[] values = new double[]
-            {
-                0.8,1.0,0.2,0.2,2.0,0.8,0.6
-            };
-
-            for (int i = 0; i < 7; i++)
-                table[i, 1] = values[i];
-
-            for (int i = 0; i < 7; i++)
-            {
-                Print("[ " + table[i, 0] + " , " + table[i, 1] + " ]");
-            }
-
-            double r = Stats.CorrelationCoefficient(table);
-            Print("R: " + r);
-        }
-
-        private void Test1()
-        {
-            double[,] table = new double[12, 2];
-
-            for (int i = 0; i < 12; i++)
-                table[i, 0] = i + 1;
-
-            double[] values = new double[]
-            {
-                 25,38,29,115,82,114,120,160,153,190,239,175
-            };
-
-            for (int i = 0; i < 12; i++)
-                table[i, 1] = values[i];
-
-            for (int i = 0; i < 12; i++)
-            {
-                Print("[ " + table[i, 0] + " , " + table[i, 1] + " ]");
-            }
-
-            double[] results = Stats.RegressionLine(table);
-            Print("m: " + results[0]);
-            Print("b: " + results[1]);
-
-            double result = Stats.CorrelationCoefficient(table);
-            Print("Correlation r: " + result);
-
-            double rmse = Stats.RootMeanSqrError(table);
+            double[] set1 = Stats.GetArray(43, 21, 25, 42, 57, 59);
+            double[] set2 = Stats.GetArray(99, 65, 79, 75, 87, 81);
+            Print("Covariance: " + Stats.Covariance(set1, set2));
+            Print("Correlation: " + Stats.CorrelationCoefficient(set1, set2));
         }
 
         #region Print Functions
