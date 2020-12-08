@@ -393,7 +393,7 @@ namespace PowerLanguage.Indicator
 
             for (int i = 0; i < firstSet.Length; i++)
                 subTotal[i] = firstSet[i] + secondSet[i];
-           
+
             double total = set1Total + set2Total;
 
             double firstSetPercent = set1Total / total;
@@ -423,7 +423,7 @@ namespace PowerLanguage.Indicator
         public double Covariance(double[] set1, double[] set2)
         {
             if (set1.Length != set2.Length) return 0;
-            
+
             int length = set1.Length;
 
             double set1Mean = Mean(set1);
@@ -455,6 +455,313 @@ namespace PowerLanguage.Indicator
         protected override string CalcBar()
         {
             return "Does not return any value";
+        }
+
+        #region Print Functions
+        private bool DebugMode = true;
+        private void Print(string message)
+        {
+            // print messages if debug mode == true.
+            if (DebugMode == false) return;
+
+            // Print who is calling Print()
+            StackTrace stackTrace = new StackTrace();
+
+            Output.WriteLine("Project:  {0}   |   Caller:  {1}   |   Bar Time:  {2}   |   Message:  {3}",
+                Name,
+                stackTrace.GetFrame(1).GetMethod().Name,
+                Bars.TimeValue.ToString("dd-MM-yy HH:mm:ss tt"),
+                message);
+        }
+        #endregion
+
+    }
+
+    public sealed class HMA_ : FunctionSeries<double>
+    {
+        public HMA_(CStudyControl _master) : base(_master) { }
+        public HMA_(CStudyControl _master, int _ds) : base(_master, _ds) { }
+
+        public ISeries<double> price { private get; set; }
+        public int length { private get; set; }
+
+        private VariableSeries<double> vWMA1, vWMA2, vWMA3;
+        private int len2Use, halvedLength, sqrRootLength;
+        private double sqLength;
+
+        protected override void Create()
+        {
+            vWMA1 = new VariableSeries<double>(this);
+            vWMA2 = new VariableSeries<double>(this);
+            vWMA3 = new VariableSeries<double>(this);
+        }
+
+        protected override void StartCalc()
+        {
+            // make sure minimum Length used is 1 to prevent possible 1/0 error
+            len2Use = length;
+            if (length < 1)
+                len2Use = 1;
+
+            // Calculate ONCE for faster computation
+            if ((Math.Ceiling((double)(len2Use / 2)) - (len2Use / 2)) <= 0.5)
+            {
+                halvedLength = (int)Math.Ceiling((double)(len2Use / 2));
+            }
+            else
+            {
+                halvedLength = (int)Math.Floor((double)(len2Use / 2));
+            }
+
+            sqLength = Math.Sqrt((double)len2Use);
+
+            if ((Math.Ceiling(sqLength) - sqLength) <= 0.5)
+            {
+                sqrRootLength = (int)Math.Ceiling(sqLength);
+            }
+            else
+            {
+                sqrRootLength = (int)Math.Floor(sqLength);
+            }
+        }
+
+        protected override double CalcBar()
+        {
+            vWMA1.Value = 2.0 * (price.WAverageCustom(halvedLength));
+
+            vWMA2.Value = price.WAverageCustom(len2Use);
+
+            vWMA3.Value = vWMA1.Value - vWMA2.Value;
+
+            double fRet = vWMA3.WAverageCustom(sqrRootLength);
+
+            return (fRet);
+        }
+    }
+
+    public sealed class HullMovingAverageF : FunctionSimple<double>
+    {
+        //================================= Project Documentation =================================
+        // Project Name : Hull Moving Average
+        // Platform     : Multicharts
+        // Class Type   : Function
+        // Date         : 08 Dec 2020
+        // Developer    : Sher Ning
+        //=========================================================================================
+        // Copyright    : 2020, Sher Ning Technologies           
+        // License      : Internal use
+        // Client       : Sher Ning
+        // Contact      : sherning@hotmail.com
+        //=========================================================================================
+        // References   :       
+        // Obectives    : 
+        // Remarks      :
+        //=========================================================================================
+
+        /*/
+         *======================================== Version ========================================
+         *  UpdateOnEveryTick = false
+         *======================================== Version ========================================
+        /*/
+
+        public int _Length { get; set; }
+        public HullMovingAverageF(CStudyControl m) : base(m) { }
+        public HullMovingAverageF(CStudyControl m, bool auto) : base(m) { Auto = auto; }
+
+
+        // fields
+        int[] Length;
+        List<double>[] PriceLists;
+        bool Auto;
+
+        protected override void StartCalc()
+        {
+            if (_Length < 1) _Length = 1;
+
+            // Length[1], Length[2], Length[3]
+            Length = new int[4];
+
+            // calculate only when there is a change in _Length value 
+            int halvedLength;
+
+            if ((Math.Ceiling((double)(_Length / 2)) - (_Length / 2)) <= 0.5)
+                halvedLength = (int)Math.Ceiling((double)(_Length / 2));
+            else
+                halvedLength = (int)Math.Floor((double)(_Length / 2));
+
+            int sqrRootLength;
+            double sqLength = Math.Sqrt(_Length);
+
+            if ((Math.Ceiling(sqLength) - sqLength) <= 0.5)
+                sqrRootLength = (int)Math.Ceiling(sqLength);
+            else
+                sqrRootLength = (int)Math.Floor(sqLength);
+
+            //Lengths[0] = 0 by default
+            Length[1] = halvedLength;
+            Length[2] = _Length;
+            Length[3] = sqrRootLength;
+
+            // create an array of 4 price list.
+            PriceLists = new List<double>[4];
+
+            //PriceLists[0] = null;
+            PriceLists[1] = new List<double>();
+            PriceLists[2] = new List<double>();
+            PriceLists[3] = new List<double>();
+        }
+
+        public void _AddData(double data)
+        {
+            // using insert method, i got to take caution.
+            PriceLists[1].Insert(0, data);
+            PriceLists[2].Insert(0, data);
+
+            // clean up list for unwanted values
+            if (PriceLists[1].Count > Length[1])
+                PriceLists[1].RemoveAt(Length[1]);
+
+            if (PriceLists[2].Count > Length[2])
+                PriceLists[2].RemoveAt(Length[2]);
+        }
+        protected override double CalcBar()
+        {
+            if (Auto) _AddData(Bars.CloseValue);
+
+            // insufficient data
+            if (PriceLists[2].Count < _Length) return -1;
+
+            // calculate 
+            double wma1 = 2.0 * WeightedAverage(PriceLists[1], Length[1]);
+            double wma2 = WeightedAverage(PriceLists[2], Length[2]);
+
+            // add the calculated data to pricelist 3
+            PriceLists[3].Insert(0, wma1 - wma2);
+
+            // check for sufficient data
+            if (PriceLists[3].Count > Length[3])
+            {
+                // clean up list for unwanted values
+                PriceLists[3].RemoveAt(Length[3]);
+
+                // calculate the weighted average and return.
+                return WeightedAverage(PriceLists[3], Length[3]);
+            }
+
+            return -1;
+        }
+
+        private double WeightedAverage(List<double> dataSet, int length)
+        {
+            // the recent data is more heavily weighted
+            if (length < 1) return 0;
+
+            double denominator = 1 / ((length + 1) * length * 0.5);
+            double weightedSum = 0;
+
+            // newest data is front loaded.
+            for (int i = 0; i < length; i++)
+                weightedSum += (length - i) * dataSet[i];
+
+            return weightedSum * denominator;
+        }
+    }
+
+    public sealed class PriceActionLineF : FunctionSeries<double>
+    {
+        //================================= Project Documentation =================================
+        // Project Name : Price Action Line Single Timeframe
+        // Platform     : Multicharts
+        // Class Type   : Function
+        // Date         : 08 Dec 2020
+        // Developer    : Sher Ning
+        //=========================================================================================
+        // Copyright    : 2020, Sher Ning Technologies           
+        // License      : Internal use
+        // Client       : Sher Ning
+        // Contact      : sherning@hotmail.com
+        //=========================================================================================
+        // References   :       
+        // Obectives    : 
+        // Remarks      :
+        //=========================================================================================
+
+        /*/
+         *======================================== Version ========================================
+         * 
+         *======================================== Version ========================================
+        /*/
+
+        public int _Length { get; set; }
+        public int _Smooth { get; set; }
+        public PriceActionLineF(CStudyControl m) : base(m)
+        {
+
+        }
+
+        HullMovingAverageF HMA;
+
+        VariableSeries<double> PalSeries;
+        protected override void Create()
+        {
+            HMA = new HullMovingAverageF(this, true);
+            PalSeries = new VariableSeries<double>(this);
+        }
+
+        double Alpha, Gain;
+        protected override void StartCalc()
+        {
+            if (_Length < 1) _Length = 1;
+            if (Gain < 0) Gain = 0;
+
+            // smoothing constant
+            Alpha = 2.0 / (_Length + 1.0);
+            Gain = _Smooth / 100.0;
+
+            // HMA Properties
+            HMA._Length = _Length;
+        }
+        protected override double CalcBar()
+        {
+            if (Bars.Status == EBarState.Close)
+            {
+                double close = Bars.CloseValue;
+                double hmaValue = HMA.Value;
+
+                if (close - this[1] > 0)
+                    // -ve gain
+                    return Alpha * (hmaValue + (-Gain) * (hmaValue - this[1])) + (1.0 - Alpha) * this[1];
+                else if (close - this[1] < 0)
+                    // +ve gain
+                    return Alpha * (hmaValue + (Gain) * (hmaValue - this[1])) + (1.0 - Alpha) * this[1];
+                else
+                    // zero gain
+                    return Alpha * (hmaValue + (0.0) * (hmaValue - this[1])) + (1.0 - Alpha) * this[1];
+
+                //Print("This[1]: " + this[1]);
+                //Print("PAL Series[1]: " + PalSeries[1]);
+            }
+
+            return -1;
+        }
+
+        private void Cache()
+        {
+            double close = Bars.CloseValue;
+            double hmaValue = HMA.Value;
+
+            if (close - this[1] > 0)
+                // -ve gain
+                PalSeries.Value = Alpha * (hmaValue + (-Gain) * (hmaValue - PalSeries[1])) + (1.0 - Alpha) * PalSeries[1];
+            else if (close - this[1] < 0)
+                // +ve gain
+                PalSeries.Value = Alpha * (hmaValue + (Gain) * (hmaValue - PalSeries[1])) + (1.0 - Alpha) * PalSeries[1];
+            else
+                // zero gain
+                PalSeries.Value = Alpha * (hmaValue + (0.0) * (hmaValue - PalSeries[1])) + (1.0 - Alpha) * PalSeries[1];
+
+            Print("This[1]: " + this[1]);
+            Print("PAL Series[1]: " + PalSeries[1]);
         }
 
         #region Print Functions
@@ -509,6 +816,9 @@ namespace PowerLanguage.Indicator
 
         Statistics Stats;
         DeveloperToolKit DevTool;
+        HullMovingAverageF HMA, Hma;
+        HMA_ Hma_;
+        PriceActionLineF PAL;
         protected override void Create()
         {
             OutputStatus = AddPlot(new StringPlotAttributes(
@@ -532,35 +842,32 @@ namespace PowerLanguage.Indicator
 
             Stats = new Statistics(this);
             DevTool = new DeveloperToolKit(this);
+            HMA = new HullMovingAverageF(this, true);
+            Hma = new HullMovingAverageF(this);
+            Hma_ = new HMA_(this);
+            PAL = new PriceActionLineF(this);
 
             Output.Clear();
         }
 
         protected override void StartCalc()
         {
+            Hma_.length = Hma._Length = HMA._Length = 6;
+            Hma_.price = Bars.Close;
 
+            PAL._Length = 6;
+            PAL._Smooth = 10;
         }
         protected override void CalcBar()
         {
             if (Bars.CurrentBar == 2)
             {
                 // currentbar == 1 called twice.
-                Test2();
             }
 
-            double highestPrice = DevTool.HighestPrice(Bars.High, 3);
-            double highestHigh = Bars.High.Highest(3);
-
-            Plot[1].Set(highestPrice);
-            Plot[2].Set(highestHigh);
-        }
-
-        private void Test2()
-        {
-            double[] set1 = Stats.GetArray(43, 21, 25, 42, 57, 59);
-            double[] set2 = Stats.GetArray(99, 65, 79, 75, 87, 81);
-            Print("Covariance: " + Stats.Covariance(set1, set2));
-            Print("Correlation: " + Stats.CorrelationCoefficient(set1, set2));
+            Hma._AddData(Bars.CloseValue);
+            //Plot[1].Set(HMA.Value);
+            Plot[2].Set(PAL.Value);
         }
 
         #region Print Functions
