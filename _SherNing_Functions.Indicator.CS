@@ -2,55 +2,13 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
+using System.IO;
 using System.Linq;
+using System.Windows.Forms;
 using PowerLanguage.Function;
 
 namespace PowerLanguage.Indicator
 {
-    public sealed class DeveloperToolKit : FunctionSimple<string>
-    {
-        //================================= Project Documentation =================================
-        // Project Name : Developer Tool Kit
-        // Platform     : Multicharts
-        // Class Type   : Function
-        // Date         : 28 Nov 2020
-        // Developer    : Sher Ning
-        //=========================================================================================
-        // Copyright    : 2020, Sher Ning Technologies           
-        // License      : Internal use
-        // Client       : Sher Ning
-        // Contact      : sherning@hotmail.com
-        //=========================================================================================
-        // References   :       
-        // Obectives    : 
-        // Remarks      :
-        //=========================================================================================
-
-        /*/
-         *======================================== Version ========================================
-         *  28/11/2020 - ISeries
-         * 
-         *======================================== Version ========================================
-        /*/
-        public DeveloperToolKit(CStudyControl m) : base(m) { }
-
-        public double HighestPrice(ISeries<double> price, int barsBack)
-        {
-            double high = 0;
-
-            // exclude current bar high
-            for (int i = 0; i < barsBack; i++)
-                high = Math.Max(high, price[i]);
-
-            return high;
-        }
-
-        protected override string CalcBar()
-        {
-            return "Does not return any value";
-        }
-    }
-
     public sealed class Statistics : FunctionSimple<string>
     {
         //================================= Project Documentation =================================
@@ -784,6 +742,166 @@ namespace PowerLanguage.Indicator
 
     }
 
+    public sealed class PriceActionLineDaily : FunctionSimple<string>
+    {
+        //================================= Project Documentation =================================
+        // Project Name : Price Action Line Daily
+        // Platform     : Multicharts
+        // Class Type   : Function
+        // Date         : 28 Nov 2020
+        // Developer    : Sher Ning
+        //=========================================================================================
+        // Copyright    : 2020, Sher Ning Technologies           
+        // License      : Internal use
+        // Client       : Sher Ning
+        // Contact      : sherning@hotmail.com
+        //=========================================================================================
+        // References   :       
+        // Obectives    : Daily, Weekly, Monthly
+        // Remarks      : 
+        //=========================================================================================
+
+        /*/
+         *======================================== Version ========================================
+         *  
+         * 
+         *======================================== Version ========================================
+        /*/
+
+        public PriceActionLineDaily(CStudyControl m) : base(m)
+        {
+
+        }
+
+        protected override void Create()
+        {
+        }
+
+        protected override void StartCalc()
+        {
+        }
+
+        protected override string CalcBar()
+        {
+
+            return "No output";
+        }
+
+
+    }
+
+    public sealed class ClosingTicks : FunctionSeries<bool>
+    {
+        //================================= Project Documentation =================================
+        // Project Name : Closing Ticks
+        // Platform     : Multicharts
+        // Class Type   : Function
+        // Date         : 30 Dec 2020
+        // Developer    : Sher Ning
+        //=========================================================================================
+        // Copyright    : 2020, Sher Ning Technologies           
+        // License      : Internal use
+        // Client       : Sher Ning
+        // Contact      : sherning@hotmail.com
+        //=========================================================================================
+        // References   :       
+        // Obectives    : Determine the closing tick for a given timeframe
+        // Remarks      : 
+        //=========================================================================================
+
+        /*/
+         *======================================== Version ========================================
+         *  28/11/2020 - US Stocks closing ticks
+         * 
+         *======================================== Version ========================================
+        /*/
+
+        public ClosingTicks(CStudyControl m) : base(m)
+        {
+
+        }
+
+        List<Holiday> Holidays;
+
+        protected override void Create()
+        {
+            Holidays = new List<Holiday>();
+        }
+
+        bool IsFileLoaded;
+        string Path = @"C:\EconomicCalendar.txt";
+
+        protected override void StartCalc()
+        {
+            // run checks
+            if (Bars.Info.Category == ESymbolCategory.Stock)
+            {
+                // load us holidays only once
+                if (!IsFileLoaded)
+                    LoadFile(Path);
+            }
+        }
+
+        protected override bool CalcBar()
+        {
+            return false;
+        }
+
+        private void LoadFile(string path)
+        {
+            if (File.Exists(path) == false)
+            {
+                MessageBox.Show("File Does not exist!", "LoadFile: " + path, 
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+
+                return;
+            }
+
+            string[] data;
+            Holiday holiday;
+
+            using (StreamReader sr = new StreamReader(path))
+            {
+                while (!sr.EndOfStream)
+                {
+                    holiday = new Holiday();
+
+                    data = sr.ReadLine().Split(',');
+                    holiday.Name = data[0];
+                    holiday.Date = DateTime.Parse(data[1]);
+
+                    // add to list
+                    Holidays.Add(holiday);
+                }
+            }
+        }
+
+        struct Holiday
+        {
+            public string Name { get; set; }
+            public DateTime Date { get; set; }
+        }
+
+        #region Print Functions
+        private bool DebugMode = true;
+        private void Print(string message)
+        {
+            // print messages if debug mode == true.
+            if (DebugMode == false) return;
+
+            // Print who is calling Print()
+            StackTrace stackTrace = new StackTrace();
+
+            Output.WriteLine("Project:  {0}   |   Caller:  {1}   |   Bar Time:  {2}   |   Message:  {3}",
+                Name,
+                stackTrace.GetFrame(1).GetMethod().Name,
+                Bars.TimeValue.ToString("dd-MM-yy HH:mm:ss tt"),
+                message);
+        }
+        #endregion
+
+    }
+
     public class _SherNing_Functions : IndicatorObject
     {
         //================================= Project Documentation =================================
@@ -813,14 +931,14 @@ namespace PowerLanguage.Indicator
 
         IPlotObjectStr OutputStatus;
         List<IPlotObject> Plot;
+        ClosingTicks WeeklyBarClosingTick;
 
-        Statistics Stats;
-        DeveloperToolKit DevTool;
-        HullMovingAverageF HMA, Hma;
-        HMA_ Hma_;
-        PriceActionLineF PAL;
         protected override void Create()
         {
+            // test objects
+            WeeklyBarClosingTick = new ClosingTicks(this);
+
+            // plot objects
             OutputStatus = AddPlot(new StringPlotAttributes(
                 "Output Status: ", Color.RoyalBlue, Color.Black));
 
@@ -840,34 +958,17 @@ namespace PowerLanguage.Indicator
                     plotNames[i], EPlotShapes.Line, Color.White, Color.Black, 3, EPlotStyle.Solid, true)));
             }
 
-            Stats = new Statistics(this);
-            DevTool = new DeveloperToolKit(this);
-            HMA = new HullMovingAverageF(this, true);
-            Hma = new HullMovingAverageF(this);
-            Hma_ = new HMA_(this);
-            PAL = new PriceActionLineF(this);
-
             Output.Clear();
         }
 
         protected override void StartCalc()
         {
-            Hma_.length = Hma._Length = HMA._Length = 6;
-            Hma_.price = Bars.Close;
 
-            PAL._Length = 6;
-            PAL._Smooth = 10;
         }
         protected override void CalcBar()
         {
-            if (Bars.CurrentBar == 2)
-            {
-                // currentbar == 1 called twice.
-            }
-
-            Hma._AddData(Bars.CloseValue);
-            //Plot[1].Set(HMA.Value);
-            Plot[2].Set(PAL.Value);
+            if (Bars.LastBarOnChart)
+                Print("Weekly Bar Closing Tick: " + WeeklyBarClosingTick.Value);
         }
 
         #region Print Functions
