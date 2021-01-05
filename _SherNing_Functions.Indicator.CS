@@ -821,65 +821,202 @@ namespace PowerLanguage.Indicator
 
         }
 
-        List<Holiday> Holidays;
-
+        List<USHolidays> BankHolidays;
+        List<DateTime> NonTradingDays;
         protected override void Create()
         {
-            Holidays = new List<Holiday>();
         }
 
-        bool IsFileLoaded;
-        string Path = @"C:\EconomicCalendar.txt";
-
+        int Year;
+        DateTime PrevTime;
         protected override void StartCalc()
         {
-            // run checks
-            if (Bars.Info.Category == ESymbolCategory.Stock)
-            {
-                // load us holidays only once
-                if (!IsFileLoaded)
-                    LoadFile(Path);
-            }
+            // check to see if bank holidays and nontrading days match.
+            BankHolidays = new List<USHolidays>();
+            NonTradingDays = new List<DateTime>();
+
+            PrevTime = Bars.Time[0];
+            Year = 0;
         }
 
         protected override bool CalcBar()
         {
+            GetNonTradingDays();
+
+            if (Bars.Time[0].Year != Year)
+            {
+                Year = Bars.Time[0].Year;
+                BankHolidays = GetUSHolidays(Year);
+
+                foreach (var holiday in BankHolidays)
+                    PrintHoliday(holiday);
+
+                Output.WriteLine("");
+
+                foreach (DateTime item in NonTradingDays)
+                    Print("Holiday: " + item);
+
+                Output.WriteLine("");
+                Output.WriteLine("");
+
+                NonTradingDays.Clear();
+            }
+
             return false;
         }
 
-        private void LoadFile(string path)
+        private void PrintHoliday(USHolidays holiday)
         {
-            if (File.Exists(path) == false)
-            {
-                MessageBox.Show("File Does not exist!", "LoadFile: " + path, 
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            Print(holiday.Name + " Date: " + holiday.Date);
+        }
 
-                return;
+        private List<USHolidays> GetUSHolidays(int currentYear)
+        {
+            // for weekly and monthly closing ticks
+            List<USHolidays> usHolidays = new List<USHolidays>();
+
+            // New Year
+            usHolidays.Add(new USHolidays("New Year", new DateTime(currentYear, 1, 1)));
+
+            // Martin Luther King Jr Day
+            DateTime martinDay = new DateTime(currentYear, 1, 15);
+
+            while (martinDay.DayOfWeek != DayOfWeek.Monday)
+                martinDay = martinDay.AddDays(1);
+
+            usHolidays.Add(new USHolidays("Martin Luther King Jr Day", martinDay));
+
+            // President's day (third monday of feb)
+            DateTime presidentDay = new DateTime(currentYear, 2, 1);
+
+            while (presidentDay.DayOfWeek != DayOfWeek.Monday)
+                presidentDay = presidentDay.AddDays(1);
+
+            presidentDay = presidentDay.AddDays(14);
+
+            usHolidays.Add(new USHolidays("President Day", presidentDay));
+
+            // Good Friday
+            DateTime goodFriday = EasterSunday(currentYear).AddDays(-2);
+            usHolidays.Add(new USHolidays("Good Friday", goodFriday));
+
+            // Memorial Day
+            DateTime memorialDay = new DateTime(currentYear, 5, 31);
+
+            while (memorialDay.DayOfWeek != DayOfWeek.Monday)
+                memorialDay = memorialDay.AddDays(-1);
+
+            usHolidays.Add(new USHolidays("Memorial Day", memorialDay));
+
+            // Independence Day
+            DateTime independenceDay = new DateTime(currentYear, 7, 4);
+
+            // if it falls on a sunday, Monday is a holiday
+            if (independenceDay.DayOfWeek == DayOfWeek.Sunday)
+                independenceDay = independenceDay.AddDays(1);
+            else if (independenceDay.DayOfWeek == DayOfWeek.Saturday)
+                independenceDay = independenceDay.AddDays(-1);
+
+            usHolidays.Add(new USHolidays("Independence Day", independenceDay));
+
+            // US Labour Day (first monday)
+            DateTime labourDay = new DateTime(currentYear, 9, 1);
+
+            while (labourDay.DayOfWeek != DayOfWeek.Monday)
+                labourDay = labourDay.AddDays(1);
+
+            usHolidays.Add(new USHolidays("Labour Day", labourDay));
+
+            // Veteran's Day (Exchange is open on veteran's day)
+            // Thanks Giving Day (4th thursday)
+            DateTime thanksGiving = new DateTime(currentYear, 11, 1);
+
+            while (thanksGiving.DayOfWeek != DayOfWeek.Thursday)
+                thanksGiving = thanksGiving.AddDays(1);
+
+            // 4th thursday
+            thanksGiving = thanksGiving.AddDays(21);
+            usHolidays.Add(new USHolidays("Thanks Giving", thanksGiving));
+
+            // Christmas Day
+            DateTime christmas = new DateTime(currentYear, 12, 25);
+
+            if (christmas.DayOfWeek == DayOfWeek.Saturday) christmas = christmas.AddDays(-1);
+            else if (christmas.DayOfWeek == DayOfWeek.Sunday) christmas = christmas.AddDays(1);
+
+            usHolidays.Add(new USHolidays("Christmas Day", christmas));
+
+            return usHolidays;
+        }
+
+        private DateTime EasterSunday(int year)
+        {
+            int day = 0;
+            int month = 0;
+
+            int g = year % 19;
+            int c = year / 100;
+            int h = (c - (int)(c / 4) - (int)((8 * c + 13) / 25) + 19 * g + 15) % 30;
+            int i = h - (int)(h / 28) * (1 - (int)(h / 28) * (int)(29 / (h + 1)) * (int)((21 - g) / 11));
+
+            day = i - ((year + (int)(year / 4) + i + 2 - c + (int)(c / 4)) % 7) + 28;
+            month = 3;
+
+            if (day > 31)
+            {
+                month++;
+                day -= 31;
             }
 
-            string[] data;
-            Holiday holiday;
+            return new DateTime(year, month, day);
+        }
 
-            using (StreamReader sr = new StreamReader(path))
+        private void GetNonTradingDays()
+        {
+            DateTime currentTime = Bars.Time[0];
+
+            if (currentTime.Date != PrevTime.Date)
             {
-                while (!sr.EndOfStream)
+                DateTime current = currentTime;
+
+                // weekend
+                if (current.DayOfWeek == DayOfWeek.Monday && PrevTime.DayOfWeek == DayOfWeek.Friday)
                 {
-                    holiday = new Holiday();
-
-                    data = sr.ReadLine().Split(',');
-                    holiday.Name = data[0];
-                    holiday.Date = DateTime.Parse(data[1]);
-
-                    // add to list
-                    Holidays.Add(holiday);
+                    PrevTime = currentTime;
+                    return;
                 }
+
+                // running days
+                TimeSpan ts = current.Date - PrevTime.Date;
+                if (ts.Days < 2)
+                {
+                    PrevTime = currentTime;
+                    return;
+                }
+
+                for (int i = 1; i < ts.Days; i++)
+                {
+                    current = current.AddDays(-1);
+
+                    if (current.DayOfWeek == DayOfWeek.Saturday || current.DayOfWeek == DayOfWeek.Sunday)
+                        continue;
+
+                    NonTradingDays.Add(current);
+                }
+
+                PrevTime = currentTime;
             }
         }
 
-        struct Holiday
+        class USHolidays
         {
             public string Name { get; set; }
             public DateTime Date { get; set; }
+            public USHolidays(string name, DateTime date)
+            {
+                Name = name;
+                Date = date;
+            }
         }
 
         #region Print Functions
@@ -935,7 +1072,7 @@ namespace PowerLanguage.Indicator
 
         protected override void Create()
         {
-            // test objects
+            // test objects, series will be called implicitly 
             WeeklyBarClosingTick = new ClosingTicks(this);
 
             // plot objects
@@ -963,12 +1100,11 @@ namespace PowerLanguage.Indicator
 
         protected override void StartCalc()
         {
-
         }
+
         protected override void CalcBar()
         {
-            if (Bars.LastBarOnChart)
-                Print("Weekly Bar Closing Tick: " + WeeklyBarClosingTick.Value);
+            
         }
 
         #region Print Functions
