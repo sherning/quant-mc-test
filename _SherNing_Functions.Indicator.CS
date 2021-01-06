@@ -790,6 +790,242 @@ namespace PowerLanguage.Indicator
 
     }
 
+    public sealed class USBankHolidays : FunctionSimple<string>
+    {
+        //================================= Project Documentation =================================
+        // Project Name : US Bank Holidays
+        // Platform     : Multicharts
+        // Class Type   : Function
+        // Date         : 06 Jan 2021
+        // Developer    : Sher Ning
+        //=========================================================================================
+        // Copyright    : 2020, Sher Ning Technologies           
+        // License      : Internal use
+        // Client       : Sher Ning
+        // Contact      : sherning@hotmail.com
+        //=========================================================================================
+        // References   :       
+        // Obectives    : Determine US Bank Holidays for current year
+        // Remarks      : 
+        //=========================================================================================
+
+        public List<DateTime> HistoricalHolidays { get; private set; }
+
+        public USBankHolidays(CStudyControl m) : base(m) { }
+
+        DateTime PrevTradingDay;
+        protected override void StartCalc()
+        {
+            HistoricalHolidays = new List<DateTime>();
+            PrevTradingDay = Bars.Time[0];
+        }
+
+        public Dictionary<DateTime, string> GetUSHolidays(int year)
+        {
+            Dictionary<DateTime, string> bankHolidays = new Dictionary<DateTime, string>();
+
+            USHoliday day;
+
+            day = NewYearDay(year);
+            bankHolidays.Add(day.Date, day.Name);
+
+            day = MartinLutherDay(year);
+            bankHolidays.Add(day.Date, day.Name);
+
+            day = PresidentDay(year);
+            bankHolidays.Add(day.Date, day.Name);
+
+            day = GoodFriday(year);
+            bankHolidays.Add(day.Date, day.Name);
+
+            day = MemorialDay(year);
+            bankHolidays.Add(day.Date, day.Name);
+
+            day = IndependenceDay(year);
+            bankHolidays.Add(day.Date, day.Name);
+
+            day = LabourDay(year);
+            bankHolidays.Add(day.Date, day.Name);
+
+            day = ThanksGivingDay(year);
+            bankHolidays.Add(day.Date, day.Name);
+
+            day = ChristmasDay(year);
+            bankHolidays.Add(day.Date, day.Name);
+
+
+            return bankHolidays;
+        }
+
+        public DateTime FirstTradingDayOfYear(int year)
+        {
+            // start from 2nd Jan
+            DateTime day = new DateTime(year, 1, 2);
+
+            for (int i = 0; i < 8; i++)
+            {
+                if (day.DayOfWeek != DayOfWeek.Saturday && day.DayOfWeek != DayOfWeek.Sunday) return day;
+                day = day.AddDays(1);
+            }
+
+            return day;
+        }
+
+        private USHoliday NewYearDay(int year)
+        {
+            return new USHoliday("New Year's Day", new DateTime(year, 1, 1));
+        }
+
+        private USHoliday MartinLutherDay(int year)
+        {
+            DateTime day = new DateTime(year, 1, 15);
+
+            while (day.DayOfWeek != DayOfWeek.Monday)
+                day = day.AddDays(1);
+
+            return new USHoliday("Martin Luther King Jr Day", day);
+        }
+
+        private USHoliday PresidentDay(int year)
+        {
+            // third monday of Feb
+            DateTime day = new DateTime(year, 2, 1);
+
+            while (day.DayOfWeek != DayOfWeek.Monday)
+                day = day.AddDays(1);
+
+            day = day.AddDays(14);
+
+            return new USHoliday("President's Day", day);
+        }
+
+        private USHoliday GoodFriday(int year)
+        {
+            int day, month;
+
+            int g = year % 19;
+            int c = year / 100;
+            int h = (c - (int)(c / 4) - (int)((8 * c + 13) / 25) + 19 * g + 15) % 30;
+            int i = h - (int)(h / 28) * (1 - (int)(h / 28) * (int)(29 / (h + 1)) * (int)((21 - g) / 11));
+
+            day = i - ((year + (int)(year / 4) + i + 2 - c + (int)(c / 4)) % 7) + 28;
+            month = 3;
+
+            if (day > 31)
+            {
+                month++;
+                day -= 31;
+            }
+
+            // get easter sunday, -2 days for good friday
+            DateTime easter = new DateTime(year, month, day);
+
+            easter = easter.AddDays(-2);
+            return new USHoliday("Good Friday", easter);
+        }
+
+        private USHoliday MemorialDay(int year)
+        {
+            DateTime day = new DateTime(year, 5, 31);
+
+            while (day.DayOfWeek != DayOfWeek.Monday)
+                day = day.AddDays(-1);
+
+            return new USHoliday("Memorial's Day", day);
+        }
+
+        private USHoliday IndependenceDay(int year)
+        {
+            DateTime day = new DateTime(year, 7, 4);
+
+            if (day.DayOfWeek == DayOfWeek.Sunday)
+                day = day.AddDays(1);
+            else if (day.DayOfWeek == DayOfWeek.Saturday)
+                day = day.AddDays(-1);
+
+            return new USHoliday("Independence's Day", day);
+        }
+
+        private USHoliday LabourDay(int year)
+        {
+            DateTime day = new DateTime(year, 9, 1);
+
+            while (day.DayOfWeek != DayOfWeek.Monday)
+                day = day.AddDays(1);
+
+            return new USHoliday("Labour's Day", day);
+        }
+
+        private USHoliday ThanksGivingDay(int year)
+        {
+            DateTime day = new DateTime(year, 11, 1);
+
+            while (day.DayOfWeek != DayOfWeek.Thursday)
+                day = day.AddDays(1);
+
+            day = day.AddDays(21);
+
+            return new USHoliday("Thanks Giving's Day", day);
+        }
+
+        private USHoliday ChristmasDay(int year)
+        {
+            DateTime day = new DateTime(year, 12, 25);
+
+            if (day.DayOfWeek == DayOfWeek.Saturday) day = day.AddDays(-1);
+            else if (day.DayOfWeek == DayOfWeek.Sunday) day = day.AddDays(1);
+
+            return new USHoliday("Christmas's Day", day);
+        }
+
+        public void GetHistoricalHolidays()
+        {
+            // check bar by bar for holiday
+            if (Bars.Time[0] != PrevTradingDay)
+            {
+                DateTime today = Bars.Time[0];
+                DateTime prev = PrevTradingDay;
+
+                PrevTradingDay = today;
+
+                // weekend
+                if (today.DayOfWeek == DayOfWeek.Monday && prev.DayOfWeek == DayOfWeek.Friday) return;
+
+                // next day
+                TimeSpan ts = today.Date - prev.Date;
+                if (ts.Days < 2) return;
+
+                for (int i = 1; i < ts.Days; i++)
+                {
+                    today = today.AddDays(-1);
+
+                    if (today.DayOfWeek == DayOfWeek.Saturday || today.DayOfWeek == DayOfWeek.Sunday)
+                        continue;
+
+                    HistoricalHolidays.Add(today);
+                }
+            }
+        }
+
+        protected override string CalcBar()
+        {
+            return "Does not have a return value";
+        }
+
+        class USHoliday
+        {
+            public string Name { get; set; }
+            public DateTime Date { get; set; }
+            public USHoliday(string name, DateTime date)
+            {
+                Name = name;
+                Date = date;
+            }
+
+            public USHoliday() { }
+        }
+    }
+
     public sealed class ClosingTicks : FunctionSeries<bool>
     {
         //================================= Project Documentation =================================
@@ -816,207 +1052,113 @@ namespace PowerLanguage.Indicator
          *======================================== Version ========================================
         /*/
 
+        public EResolution Resolution { get; set; }
+        public int ResolutionSize { get; set; }
         public ClosingTicks(CStudyControl m) : base(m)
         {
 
         }
 
-        List<USHolidays> BankHolidays;
-        List<DateTime> NonTradingDays;
+        USBankHolidays BankHolidays;
+        Dictionary<DateTime, string> USHolidays;
         protected override void Create()
         {
+            BankHolidays = new USBankHolidays(this);
+            USHolidays = new Dictionary<DateTime, string>();
         }
 
         int Year;
-        DateTime PrevTime;
         protected override void StartCalc()
         {
-            // check to see if bank holidays and nontrading days match.
-            BankHolidays = new List<USHolidays>();
-            NonTradingDays = new List<DateTime>();
-
-            PrevTime = Bars.Time[0];
             Year = 0;
         }
 
         protected override bool CalcBar()
         {
-            GetNonTradingDays();
-
-            if (Bars.Time[0].Year != Year)
+            if (Bars.Time[0].Date == BankHolidays.FirstTradingDayOfYear(Bars.Time[0].Year).Date)
             {
+                // once annually
                 Year = Bars.Time[0].Year;
-                BankHolidays = GetUSHolidays(Year);
-
-                foreach (var holiday in BankHolidays)
-                    PrintHoliday(holiday);
-
-                Output.WriteLine("");
-
-                foreach (DateTime item in NonTradingDays)
-                    Print("Holiday: " + item);
-
-                Output.WriteLine("");
-                Output.WriteLine("");
-
-                NonTradingDays.Clear();
+                USHolidays = BankHolidays.GetUSHolidays(Year);
             }
+
+            bool closingTick = false;
+
+            switch (Resolution)
+            {
+
+                case EResolution.Minute:
+                    break;
+
+                case EResolution.Day:
+                    break;
+
+                case EResolution.Week:
+                    closingTick = StocksWeeklyClosingTick();
+                    break;
+
+                case EResolution.Month:
+                    closingTick = StocksMonthlyClosingTick();
+                    break;
+
+                case EResolution.Year:
+                    break;
+
+                default:
+                    break;
+            }
+
+
+            return closingTick;
+        }
+
+        private bool StocksMonthlyClosingTick()
+        {
+            if (Bars.Status != EBarState.Close) return false;
+
+            // get last day of the month
+            int year = Bars.Time[0].Year;
+            int month = Bars.Time[0].Month;
+            int day = DateTime.DaysInMonth(year, month);
+
+            DateTime lastTradingDay = new DateTime();
+
+            while (day > 0)
+            {
+                DateTime current = new DateTime(year, month, day);
+                if(current.DayOfWeek < DayOfWeek.Saturday && 
+                   current.DayOfWeek > DayOfWeek.Sunday && 
+                   !USHolidays.ContainsKey(current))
+                {
+                    lastTradingDay = current;
+                    break;
+                }
+
+                day--;
+            }
+
+            return Bars.Time[0].Date == lastTradingDay.Date;
+        }
+
+        private bool StocksWeeklyClosingTick()
+        {
+            if (Bars.Status != EBarState.Close) return false;
+
+            // datetime immutable
+            DateTime today = Bars.Time[0];
+            DateTime tomorrow = today.AddDays(1);
+
+            // tomorrow is a friday and a bank holiday
+            foreach (var holiday in USHolidays)
+            {
+                if (tomorrow.Date == holiday.Key.Date && tomorrow.DayOfWeek == DayOfWeek.Friday)
+                    return true;
+            }
+
+            // tomorrow is sat
+            if (tomorrow.DayOfWeek == DayOfWeek.Saturday) return true;
 
             return false;
-        }
-
-        private void PrintHoliday(USHolidays holiday)
-        {
-            Print(holiday.Name + " Date: " + holiday.Date);
-        }
-
-        private List<USHolidays> GetUSHolidays(int currentYear)
-        {
-            // for weekly and monthly closing ticks
-            List<USHolidays> usHolidays = new List<USHolidays>();
-
-            // New Year
-            usHolidays.Add(new USHolidays("New Year", new DateTime(currentYear, 1, 1)));
-
-            // Martin Luther King Jr Day
-            DateTime martinDay = new DateTime(currentYear, 1, 15);
-
-            while (martinDay.DayOfWeek != DayOfWeek.Monday)
-                martinDay = martinDay.AddDays(1);
-
-            usHolidays.Add(new USHolidays("Martin Luther King Jr Day", martinDay));
-
-            // President's day (third monday of feb)
-            DateTime presidentDay = new DateTime(currentYear, 2, 1);
-
-            while (presidentDay.DayOfWeek != DayOfWeek.Monday)
-                presidentDay = presidentDay.AddDays(1);
-
-            presidentDay = presidentDay.AddDays(14);
-
-            usHolidays.Add(new USHolidays("President Day", presidentDay));
-
-            // Good Friday
-            DateTime goodFriday = EasterSunday(currentYear).AddDays(-2);
-            usHolidays.Add(new USHolidays("Good Friday", goodFriday));
-
-            // Memorial Day
-            DateTime memorialDay = new DateTime(currentYear, 5, 31);
-
-            while (memorialDay.DayOfWeek != DayOfWeek.Monday)
-                memorialDay = memorialDay.AddDays(-1);
-
-            usHolidays.Add(new USHolidays("Memorial Day", memorialDay));
-
-            // Independence Day
-            DateTime independenceDay = new DateTime(currentYear, 7, 4);
-
-            // if it falls on a sunday, Monday is a holiday
-            if (independenceDay.DayOfWeek == DayOfWeek.Sunday)
-                independenceDay = independenceDay.AddDays(1);
-            else if (independenceDay.DayOfWeek == DayOfWeek.Saturday)
-                independenceDay = independenceDay.AddDays(-1);
-
-            usHolidays.Add(new USHolidays("Independence Day", independenceDay));
-
-            // US Labour Day (first monday)
-            DateTime labourDay = new DateTime(currentYear, 9, 1);
-
-            while (labourDay.DayOfWeek != DayOfWeek.Monday)
-                labourDay = labourDay.AddDays(1);
-
-            usHolidays.Add(new USHolidays("Labour Day", labourDay));
-
-            // Veteran's Day (Exchange is open on veteran's day)
-            // Thanks Giving Day (4th thursday)
-            DateTime thanksGiving = new DateTime(currentYear, 11, 1);
-
-            while (thanksGiving.DayOfWeek != DayOfWeek.Thursday)
-                thanksGiving = thanksGiving.AddDays(1);
-
-            // 4th thursday
-            thanksGiving = thanksGiving.AddDays(21);
-            usHolidays.Add(new USHolidays("Thanks Giving", thanksGiving));
-
-            // Christmas Day
-            DateTime christmas = new DateTime(currentYear, 12, 25);
-
-            if (christmas.DayOfWeek == DayOfWeek.Saturday) christmas = christmas.AddDays(-1);
-            else if (christmas.DayOfWeek == DayOfWeek.Sunday) christmas = christmas.AddDays(1);
-
-            usHolidays.Add(new USHolidays("Christmas Day", christmas));
-
-            return usHolidays;
-        }
-
-        private DateTime EasterSunday(int year)
-        {
-            int day = 0;
-            int month = 0;
-
-            int g = year % 19;
-            int c = year / 100;
-            int h = (c - (int)(c / 4) - (int)((8 * c + 13) / 25) + 19 * g + 15) % 30;
-            int i = h - (int)(h / 28) * (1 - (int)(h / 28) * (int)(29 / (h + 1)) * (int)((21 - g) / 11));
-
-            day = i - ((year + (int)(year / 4) + i + 2 - c + (int)(c / 4)) % 7) + 28;
-            month = 3;
-
-            if (day > 31)
-            {
-                month++;
-                day -= 31;
-            }
-
-            return new DateTime(year, month, day);
-        }
-
-        private void GetNonTradingDays()
-        {
-            DateTime currentTime = Bars.Time[0];
-
-            if (currentTime.Date != PrevTime.Date)
-            {
-                DateTime current = currentTime;
-
-                // weekend
-                if (current.DayOfWeek == DayOfWeek.Monday && PrevTime.DayOfWeek == DayOfWeek.Friday)
-                {
-                    PrevTime = currentTime;
-                    return;
-                }
-
-                // running days
-                TimeSpan ts = current.Date - PrevTime.Date;
-                if (ts.Days < 2)
-                {
-                    PrevTime = currentTime;
-                    return;
-                }
-
-                for (int i = 1; i < ts.Days; i++)
-                {
-                    current = current.AddDays(-1);
-
-                    if (current.DayOfWeek == DayOfWeek.Saturday || current.DayOfWeek == DayOfWeek.Sunday)
-                        continue;
-
-                    NonTradingDays.Add(current);
-                }
-
-                PrevTime = currentTime;
-            }
-        }
-
-        class USHolidays
-        {
-            public string Name { get; set; }
-            public DateTime Date { get; set; }
-            public USHolidays(string name, DateTime date)
-            {
-                Name = name;
-                Date = date;
-            }
         }
 
         #region Print Functions
@@ -1069,11 +1211,13 @@ namespace PowerLanguage.Indicator
         IPlotObjectStr OutputStatus;
         List<IPlotObject> Plot;
         ClosingTicks WeeklyBarClosingTick;
+        USBankHolidays Holidays;
 
         protected override void Create()
         {
             // test objects, series will be called implicitly 
             WeeklyBarClosingTick = new ClosingTicks(this);
+            Holidays = new USBankHolidays(this);
 
             // plot objects
             OutputStatus = AddPlot(new StringPlotAttributes(
@@ -1100,11 +1244,24 @@ namespace PowerLanguage.Indicator
 
         protected override void StartCalc()
         {
+            WeeklyBarClosingTick.Resolution = EResolution.Month;
         }
 
+        int Year;
         protected override void CalcBar()
         {
-            
+            if (Bars.Time[0].Year >= 2010)
+            {
+                if (WeeklyBarClosingTick.Value)
+                    Print("Closing Tick: " + Bars.Time[0].DayOfWeek);
+            }
+
+            if (Bars.Time[0].Year != Year)
+            {
+                Output.WriteLine("");
+                Year = Bars.Time[0].Year;
+            }
+
         }
 
         #region Print Functions
