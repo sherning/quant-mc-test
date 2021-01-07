@@ -742,10 +742,10 @@ namespace PowerLanguage.Indicator
 
     }
 
-    public sealed class PriceActionLineDaily : FunctionSimple<string>
+    public sealed class PriceActionLineMTF : FunctionSimple<string>
     {
         //================================= Project Documentation =================================
-        // Project Name : Price Action Line Daily
+        // Project Name : Price Action Line Multitime Frame
         // Platform     : Multicharts
         // Class Type   : Function
         // Date         : 28 Nov 2020
@@ -761,17 +761,7 @@ namespace PowerLanguage.Indicator
         // Remarks      : 
         //=========================================================================================
 
-        /*/
-         *======================================== Version ========================================
-         *  
-         * 
-         *======================================== Version ========================================
-        /*/
-
-        public PriceActionLineDaily(CStudyControl m) : base(m)
-        {
-
-        }
+        public PriceActionLineMTF (CStudyControl m) : base(m) { }
 
         protected override void Create()
         {
@@ -1045,20 +1035,12 @@ namespace PowerLanguage.Indicator
         // Remarks      : 
         //=========================================================================================
 
-        /*/
-         *======================================== Version ========================================
-         *  28/11/2020 - US Stocks closing ticks
-         * 
-         *======================================== Version ========================================
-        /*/
-
         public EResolution Resolution { get; set; }
+        public ESymbolCategory Category { get; set; }
         public int ResolutionSize { get; set; }
-        public ClosingTicks(CStudyControl m) : base(m)
-        {
+        public ClosingTicks(CStudyControl m) : base(m) { }
 
-        }
-
+        // reference variables
         USBankHolidays BankHolidays;
         Dictionary<DateTime, string> USHolidays;
         protected override void Create()
@@ -1067,6 +1049,7 @@ namespace PowerLanguage.Indicator
             USHolidays = new Dictionary<DateTime, string>();
         }
 
+        // variables
         int Year;
         protected override void StartCalc()
         {
@@ -1077,42 +1060,206 @@ namespace PowerLanguage.Indicator
         {
             if (Bars.Time[0].Date == BankHolidays.FirstTradingDayOfYear(Bars.Time[0].Year).Date)
             {
-                // once annually
+                // calculate once annually on the first trading day closing
                 Year = Bars.Time[0].Year;
                 USHolidays = BankHolidays.GetUSHolidays(Year);
             }
 
             bool closingTick = false;
 
+            BankHolidays.GetHistoricalHolidays();
+
+            // resolution filter
             switch (Resolution)
             {
-
                 case EResolution.Minute:
+                    closingTick = MinutesClosingTick();
                     break;
 
                 case EResolution.Day:
+                    closingTick = IsSessionEnd();
                     break;
 
                 case EResolution.Week:
-                    closingTick = StocksWeeklyClosingTick();
+                    closingTick = WeeklyClosingTick();
                     break;
 
                 case EResolution.Month:
-                    closingTick = StocksMonthlyClosingTick();
+                    closingTick = MonthlyClosingTick();
                     break;
 
                 case EResolution.Year:
+                    closingTick = AnnualClosingTick();
                     break;
 
                 default:
                     break;
             }
 
+            return closingTick;
+        }
+
+        #region Category Filter
+        private bool AnnualClosingTick()
+        {
+            bool closingTick = false;
+
+            switch (Category)
+            {
+                default:
+                    break;
+
+                case ESymbolCategory.Future:
+                    break;
+
+                case ESymbolCategory.Stock:
+                    closingTick = StockAnnualClosingTick();
+                    break;
+
+                case ESymbolCategory.Cash:
+                    break;
+
+                case ESymbolCategory.Forex:
+                    break;
+            }
 
             return closingTick;
         }
 
-        private bool StocksMonthlyClosingTick()
+        private bool MonthlyClosingTick()
+        {
+            bool closingTick = false;
+
+            switch (Category)
+            {
+                default:
+                case ESymbolCategory.None:
+                    break;
+
+                case ESymbolCategory.Future:
+                    break;
+
+                case ESymbolCategory.Stock:
+                    closingTick = StockMonthlyClosingTick();
+                    break;
+
+                case ESymbolCategory.Cash:
+                    break;
+
+                case ESymbolCategory.Forex:
+                    break;
+            }
+
+            return closingTick;
+        }
+
+        private bool WeeklyClosingTick()
+        {
+            bool closingTick = false;
+
+            switch (Category)
+            {
+                default:
+                case ESymbolCategory.None:
+                    break;
+
+                case ESymbolCategory.Future:
+                    break;
+
+                case ESymbolCategory.Stock:
+                    closingTick = StockWeeklyClosingTick();
+                    break;
+
+                case ESymbolCategory.Cash:
+                    break;
+
+                case ESymbolCategory.Forex:
+                    break;
+            }
+
+            return closingTick;
+        }
+
+        private bool MinutesClosingTick()
+        {
+            bool closingTick = false;
+
+            int timeFromOpenTotalMinuate = GetTimeFromSessionOpen();
+            int currentTime = ConvertTimeToInt(Bars.TimeValue);
+            int sessionEnd = ConvertTimeToInt(Bars.Sessions[0].EndTime);
+
+            bool sessionEnded = currentTime == sessionEnd;
+
+            switch (ResolutionSize)
+            {
+                default:
+                case 0:
+                    break;
+
+                case 5:
+                    closingTick = timeFromOpenTotalMinuate % 005 == 0 || sessionEnded;
+                    break;
+
+                case 10:
+                    closingTick = timeFromOpenTotalMinuate % 010 == 0 || sessionEnded;
+                    break;
+
+                case 15:
+                    closingTick = timeFromOpenTotalMinuate % 015 == 0 || sessionEnded;
+                    break;
+
+                case 20:
+                    closingTick = timeFromOpenTotalMinuate % 020 == 0 || sessionEnded;
+                    break;
+
+                case 30:
+                    closingTick = timeFromOpenTotalMinuate % 030 == 0 || sessionEnded;
+                    break;
+
+                case 60:
+                    closingTick = timeFromOpenTotalMinuate % 060 == 0 || sessionEnded;
+                    break;
+
+                case 120:
+                    closingTick = timeFromOpenTotalMinuate % 120 == 0 || sessionEnded;
+                    break;
+
+                case 240:
+                    closingTick = timeFromOpenTotalMinuate % 240 == 0 || sessionEnded;
+                    break;
+            }
+
+            return closingTick;
+        }
+        #endregion
+
+        #region Stocks
+        private bool StockWeeklyClosingTick()
+        {
+            if (Bars.Status != EBarState.Close) return false;
+
+            // datetime immutable
+            DateTime today = Bars.Time[0];
+            DateTime tomorrow = today.AddDays(1);
+
+            bool sessionEnd = IsSessionEnd();
+
+            // tomorrow is a friday and a bank holiday
+            foreach (var holiday in USHolidays)
+            {
+                if (tomorrow.Date == holiday.Key.Date &&
+                    tomorrow.DayOfWeek == DayOfWeek.Friday &&
+                    sessionEnd) return true;
+            }
+
+            // tomorrow is sat
+            if (tomorrow.DayOfWeek == DayOfWeek.Saturday &&
+                sessionEnd) return true;
+
+            return false;
+        }
+
+        private bool StockMonthlyClosingTick()
         {
             if (Bars.Status != EBarState.Close) return false;
 
@@ -1123,12 +1270,15 @@ namespace PowerLanguage.Indicator
 
             DateTime lastTradingDay = new DateTime();
 
+            bool sessionEnd = IsSessionEnd();
+
             while (day > 0)
             {
                 DateTime current = new DateTime(year, month, day);
-                if(current.DayOfWeek < DayOfWeek.Saturday && 
-                   current.DayOfWeek > DayOfWeek.Sunday && 
-                   !USHolidays.ContainsKey(current))
+                if (current.DayOfWeek < DayOfWeek.Saturday &&
+                   current.DayOfWeek > DayOfWeek.Sunday &&
+                   !USHolidays.ContainsKey(current) &&
+                   sessionEnd)
                 {
                     lastTradingDay = current;
                     break;
@@ -1140,26 +1290,101 @@ namespace PowerLanguage.Indicator
             return Bars.Time[0].Date == lastTradingDay.Date;
         }
 
-        private bool StocksWeeklyClosingTick()
+        private bool StockAnnualClosingTick()
         {
             if (Bars.Status != EBarState.Close) return false;
 
-            // datetime immutable
-            DateTime today = Bars.Time[0];
-            DateTime tomorrow = today.AddDays(1);
+            // get last day of the month
+            int year = Bars.Time[0].Year;
+            int month = 12;
+            int day = DateTime.DaysInMonth(year, month);
 
-            // tomorrow is a friday and a bank holiday
-            foreach (var holiday in USHolidays)
+            DateTime lastTradingDay = new DateTime();
+
+            bool sessionEnd = IsSessionEnd();
+
+            while (day > 0)
             {
-                if (tomorrow.Date == holiday.Key.Date && tomorrow.DayOfWeek == DayOfWeek.Friday)
-                    return true;
+                DateTime current = new DateTime(year, month, day);
+                if (current.DayOfWeek < DayOfWeek.Saturday &&
+                   current.DayOfWeek > DayOfWeek.Sunday &&
+                   !USHolidays.ContainsKey(current) &&
+                   sessionEnd)
+                {
+                    lastTradingDay = current;
+                    break;
+                }
+
+                day--;
             }
 
-            // tomorrow is sat
-            if (tomorrow.DayOfWeek == DayOfWeek.Saturday) return true;
-
-            return false;
+            return Bars.Time[0].Date == lastTradingDay.Date;
         }
+
+       
+        #endregion
+
+        #region Futures
+
+        #endregion
+
+        #region Forex
+
+        #endregion
+
+        #region Helper
+        private bool IsSessionEnd()
+        {
+            int current = ConvertTimeToInt(Bars.TimeValue);
+            int sessionEndTime = ConvertTimeToInt(Bars.Sessions[0].EndTime);
+
+            return current == sessionEndTime;
+        }
+
+        private int GetTimeFromSessionOpen()
+        {
+            // time elapsed in minutes since session open
+            int minutesFromOpen = 0;
+
+            // current time from midnight 0000
+            int current = 60 * Bars.TimeValue.Hour + Bars.TimeValue.Minute;
+
+            // time at midnight in minutes
+            int midnight = 24 * 60;
+
+            int sessionStart = (int)Bars.Sessions[0].StartTime.TotalMinutes;
+            int sessionEnd = (int)Bars.Sessions[0].EndTime.TotalMinutes;
+
+            if (current >= sessionStart && current < midnight)
+            {
+                minutesFromOpen = current - sessionStart;
+            }
+            else if (current > 0 && current <= sessionEnd)
+            {
+                minutesFromOpen = midnight - sessionStart + current;
+            }
+            else if (current == 0)
+            {
+                minutesFromOpen = midnight - sessionStart;
+            }
+
+            return minutesFromOpen;
+        }
+
+        private int ConvertTimeToInt(TimeSpan time)
+        {
+            int hours = time.Hours * 100;
+            int minutes = time.Minutes;
+            return hours + minutes;
+        }
+
+        private int ConvertTimeToInt(DateTime time)
+        {
+            int hours = time.Hour * 100;
+            int minutes = time.Minute;
+            return hours + minutes;
+        }
+        #endregion
 
         #region Print Functions
         private bool DebugMode = true;
@@ -1210,14 +1435,10 @@ namespace PowerLanguage.Indicator
 
         IPlotObjectStr OutputStatus;
         List<IPlotObject> Plot;
-        ClosingTicks WeeklyBarClosingTick;
-        USBankHolidays Holidays;
 
         protected override void Create()
         {
             // test objects, series will be called implicitly 
-            WeeklyBarClosingTick = new ClosingTicks(this);
-            Holidays = new USBankHolidays(this);
 
             // plot objects
             OutputStatus = AddPlot(new StringPlotAttributes(
@@ -1244,7 +1465,7 @@ namespace PowerLanguage.Indicator
 
         protected override void StartCalc()
         {
-            WeeklyBarClosingTick.Resolution = EResolution.Month;
+            // set properties
         }
 
         int Year;
@@ -1252,8 +1473,7 @@ namespace PowerLanguage.Indicator
         {
             if (Bars.Time[0].Year >= 2010)
             {
-                if (WeeklyBarClosingTick.Value)
-                    Print("Closing Tick: " + Bars.Time[0].DayOfWeek);
+                
             }
 
             if (Bars.Time[0].Year != Year)
