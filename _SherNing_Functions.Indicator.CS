@@ -497,7 +497,7 @@ namespace PowerLanguage.Indicator
         }
     }
 
-    public sealed class HullMovingAverageF : FunctionSimple<double>
+    public sealed class HullMovingAverage : FunctionSeries<double>
     {
         //================================= Project Documentation =================================
         // Project Name : Hull Moving Average
@@ -523,8 +523,8 @@ namespace PowerLanguage.Indicator
         /*/
 
         public int _Length { get; set; }
-        public HullMovingAverageF(CStudyControl m) : base(m) { }
-        public HullMovingAverageF(CStudyControl m, bool auto) : base(m) { Auto = auto; }
+        public HullMovingAverage(CStudyControl m) : base(m) { }
+        public HullMovingAverage(CStudyControl m, bool auto) : base(m) { Auto = auto; }
 
 
         // fields
@@ -657,12 +657,12 @@ namespace PowerLanguage.Indicator
 
         }
 
-        HullMovingAverageF HMA;
+        HullMovingAverage HMA;
 
         VariableSeries<double> PalSeries;
         protected override void Create()
         {
-            HMA = new HullMovingAverageF(this, true);
+            HMA = new HullMovingAverage(this, true);
             PalSeries = new VariableSeries<double>(this);
         }
 
@@ -761,22 +761,149 @@ namespace PowerLanguage.Indicator
         // Remarks      : 
         //=========================================================================================
 
-        public PriceActionLineMTF (CStudyControl m) : base(m) { }
+        public int Length { get; set; }
+        public int Smooth { get; set; }
+
+        public VariableSeries<double> PAL_1 { get { return PAL[1]; } }
+        public VariableSeries<double> PAL_2 { get { return PAL[2]; } }
+        public VariableSeries<double> PAL_3 { get { return PAL[3]; } }
+
+        public PriceActionLineMTF(CStudyControl m) : base(m) { }
+
+        // 4 timeframes, day, week, month, year, avoid [0] for ambiguity
+        const int TFs = 5;
+
+        // function series, works as variable series, which has built in list
+        ClosingTick[] ClosingTicks;
+        HullMovingAverage[] HMA;
+        VariableSeries<double>[] PAL;
 
         protected override void Create()
         {
+            ClosingTicks = new ClosingTick[TFs];
+            HMA = new HullMovingAverage[TFs];
+            PAL = new VariableSeries<double>[TFs];
+
+            for (int timeframe = 0; timeframe < TFs; timeframe++)
+            {
+                ClosingTicks[timeframe] = new ClosingTick(this);
+                HMA[timeframe] = new HullMovingAverage(this);
+                PAL[timeframe] = new VariableSeries<double>(this);
+            }
         }
 
+        double Alpha, Gain;
+        double[] BarCount, Highs, Lows, Opens, Closes, Prices;
         protected override void StartCalc()
         {
+            if (Length < 1) Length = 1;
+
+            Alpha = 2.0 + (Length + 1.0);
+            Gain = Smooth / 100.0;
+
+            BarCount = new double[TFs];
+            Highs = new double[TFs];
+            Lows = new double[TFs];
+            Opens = new double[TFs];
+            Closes = new double[TFs];
+            Prices = new double[TFs];
+
+            // properties
+            for (int i = 0; i < TFs; i++)
+                HMA[i]._Length = Length;
+
+            for (int i = 0; i < TFs; i++)
+                ClosingTicks[i].Resolution = (EResolution)(3 + i);
         }
 
         protected override string CalcBar()
         {
+            if (Bars.Status != EBarState.Close) return "Calculate on bar close only";
+
+            for (int timeframe = 1; timeframe < TFs; timeframe++)
+            {
+                SetPriceData(timeframe);
+
+                SetPalValue(timeframe);
+
+                if (ClosingTicks[timeframe][0])
+                    BarCount[timeframe]++;
+            }
 
             return "No output";
         }
 
+        private void SetPalValue(int timeframe)
+        {
+            if (ClosingTicks[timeframe].Value)
+            {
+                HMA[timeframe]._AddData(Closes[timeframe]);
+
+                double hma = HMA[timeframe].Value;
+
+                //if (Closes[timeframe] - PAL[timeframe][1] > 0)
+                //{
+                //    // Gain < 0
+                //    PAL[timeframe].Value
+                //        = Alpha * (hma + (-Gain) * (hma - PAL[timeframe][1]))
+                //        + (1.0 - Alpha) * PAL[timeframe][1];
+                //}
+                //else if (Closes[timeframe] - PAL[timeframe][1] < 0)
+                //{
+                //    // Gain > 0
+                //    PAL[timeframe].Value
+                //       = Alpha * (hma + Gain * (hma - PAL[timeframe][1]))
+                //       + (1.0 - Alpha) * PAL[timeframe][1];
+                //}
+                //else
+                //{
+                //    // Gain = 0
+                //    PAL[timeframe].Value
+                //       = Alpha * (hma + 0.0 * (hma - PAL[timeframe][1]))
+                //       + (1.0 - Alpha) * PAL[timeframe][1];
+                //}
+            }
+        }
+
+        private void SetPriceData(int timeframe)
+        {
+            if (BarCount[timeframe] > 0)
+            {
+                if (ClosingTicks[timeframe][1])
+                {
+                    Highs[timeframe] = Bars.HighValue;
+                    Lows[timeframe] = Bars.LowValue;
+                    Opens[timeframe] = Bars.OpenValue;
+                    Closes[timeframe] = Bars.CloseValue;
+                }
+                else
+                {
+                    Highs[timeframe] = Math.Max(Bars.HighValue, Highs[timeframe]);
+                    Lows[timeframe] = Math.Min(Bars.LowValue, Lows[timeframe]);
+                }
+
+                if (ClosingTicks[timeframe][0])
+                    Closes[timeframe] = Bars.CloseValue;
+            }
+        }
+
+        #region Print
+        private bool DebugMode = true;
+        private void Print(string message)
+        {
+            // print messages if debug mode == true.
+            if (DebugMode == false) return;
+
+            // Print who is calling Print()
+            StackTrace stackTrace = new StackTrace();
+
+            Output.WriteLine("Project:  {0}   |   Caller:  {1}   |   Bar Time:  {2}   |   Message:  {3}",
+                Name,
+                stackTrace.GetFrame(1).GetMethod().Name,
+                Bars.TimeValue.ToString("dd-MM-yy HH:mm:ss tt"),
+                message);
+        }
+        #endregion
 
     }
 
@@ -1016,7 +1143,7 @@ namespace PowerLanguage.Indicator
         }
     }
 
-    public sealed class ClosingTicks : FunctionSeries<bool>
+    public sealed class ClosingTick : FunctionSeries<bool>
     {
         //================================= Project Documentation =================================
         // Project Name : Closing Ticks
@@ -1036,9 +1163,8 @@ namespace PowerLanguage.Indicator
         //=========================================================================================
 
         public EResolution Resolution { get; set; }
-        public ESymbolCategory Category { get; set; }
         public int ResolutionSize { get; set; }
-        public ClosingTicks(CStudyControl m) : base(m) { }
+        public ClosingTick(CStudyControl m) : base(m) { }
 
         // reference variables
         USBankHolidays BankHolidays;
@@ -1051,9 +1177,11 @@ namespace PowerLanguage.Indicator
 
         // variables
         int Year;
+        ESymbolCategory Category;
         protected override void StartCalc()
         {
             Year = 0;
+            Category = Bars.Info.Category;
         }
 
         protected override bool CalcBar()
@@ -1321,7 +1449,7 @@ namespace PowerLanguage.Indicator
             return Bars.Time[0].Date == lastTradingDay.Date;
         }
 
-       
+
         #endregion
 
         #region Futures
@@ -1386,7 +1514,7 @@ namespace PowerLanguage.Indicator
         }
         #endregion
 
-        #region Print Functions
+        #region Print
         private bool DebugMode = true;
         private void Print(string message)
         {
@@ -1425,20 +1553,25 @@ namespace PowerLanguage.Indicator
         // Remarks      : Use this framework to build and test functions
         //=========================================================================================
 
-        /*/
-         *======================================== Version ========================================
-         *  28/11/2020 - Statistics
-         * 
-         *======================================== Version ========================================
-        /*/
+
+
         public _SherNing_Functions(object _ctx) : base(_ctx) { }
 
         IPlotObjectStr OutputStatus;
         List<IPlotObject> Plot;
-
+        PriceActionLineMTF PAL;
+        VariableSeries<double>[] PALs;
+        const int TFs = 5;
         protected override void Create()
         {
             // test objects, series will be called implicitly 
+            PAL = new PriceActionLineMTF(this);
+            PALs = new VariableSeries<double>[TFs];
+
+            for (int i = 0; i < TFs; i++)
+            {
+                PALs[i] = new VariableSeries<double>(this);
+            }
 
             // plot objects
             OutputStatus = AddPlot(new StringPlotAttributes(
@@ -1466,14 +1599,27 @@ namespace PowerLanguage.Indicator
         protected override void StartCalc()
         {
             // set properties
+            PAL.Length = 6;
+            PAL.Smooth = 10;
         }
 
         int Year;
         protected override void CalcBar()
         {
-            if (Bars.Time[0].Year >= 2010)
+            if (Bars.CurrentBar == 2)
             {
-                
+                PALs[1] = PAL.PAL_1;
+                PALs[2] = PAL.PAL_2;
+                PALs[3] = PAL.PAL_3;
+            }
+
+            PAL.Call();
+
+            if (Bars.Time[0].Year >= 2019)
+            {
+                //Print("PAL_1: " + PALs[1].Value);
+                //Print("PAL_2: " + PALs[2].Value);
+                //Print("PAL_3: " + PALs[3].Value);
             }
 
             if (Bars.Time[0].Year != Year)
