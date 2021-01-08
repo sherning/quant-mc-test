@@ -644,41 +644,30 @@ namespace PowerLanguage.Indicator
         // Remarks      :
         //=========================================================================================
 
-        /*/
-         *======================================== Version ========================================
-         * 
-         *======================================== Version ========================================
-        /*/
-
-        public int _Length { get; set; }
-        public int _Smooth { get; set; }
-        public PriceActionLineF(CStudyControl m) : base(m)
-        {
-
-        }
+        public int Length { get; set; }
+        public int Smooth { get; set; }
+        public PriceActionLineF(CStudyControl m) : base(m) { }
 
         HullMovingAverage HMA;
-
-        VariableSeries<double> PalSeries;
         protected override void Create()
         {
             HMA = new HullMovingAverage(this, true);
-            PalSeries = new VariableSeries<double>(this);
         }
 
         double Alpha, Gain;
         protected override void StartCalc()
         {
-            if (_Length < 1) _Length = 1;
+            if (Length < 1) Length = 1;
             if (Gain < 0) Gain = 0;
 
             // smoothing constant
-            Alpha = 2.0 / (_Length + 1.0);
-            Gain = _Smooth / 100.0;
+            Alpha = 2.0 / (Length + 1.0);
+            Gain = Smooth / 100.0;
 
             // HMA Properties
-            HMA._Length = _Length;
+            HMA._Length = Length;
         }
+
         protected override double CalcBar()
         {
             if (Bars.Status == EBarState.Close)
@@ -695,31 +684,9 @@ namespace PowerLanguage.Indicator
                 else
                     // zero gain
                     return Alpha * (hmaValue + (0.0) * (hmaValue - this[1])) + (1.0 - Alpha) * this[1];
-
-                //Print("This[1]: " + this[1]);
-                //Print("PAL Series[1]: " + PalSeries[1]);
             }
 
             return -1;
-        }
-
-        private void Cache()
-        {
-            double close = Bars.CloseValue;
-            double hmaValue = HMA.Value;
-
-            if (close - this[1] > 0)
-                // -ve gain
-                PalSeries.Value = Alpha * (hmaValue + (-Gain) * (hmaValue - PalSeries[1])) + (1.0 - Alpha) * PalSeries[1];
-            else if (close - this[1] < 0)
-                // +ve gain
-                PalSeries.Value = Alpha * (hmaValue + (Gain) * (hmaValue - PalSeries[1])) + (1.0 - Alpha) * PalSeries[1];
-            else
-                // zero gain
-                PalSeries.Value = Alpha * (hmaValue + (0.0) * (hmaValue - PalSeries[1])) + (1.0 - Alpha) * PalSeries[1];
-
-            Print("This[1]: " + this[1]);
-            Print("PAL Series[1]: " + PalSeries[1]);
         }
 
         #region Print Functions
@@ -777,10 +744,11 @@ namespace PowerLanguage.Indicator
         ClosingTick[] ClosingTicks;
         HullMovingAverage[] HMA;
         VariableSeries<double>[] PAL;
-
+        VariableSeries<bool>[] CloseTick;
         protected override void Create()
         {
             ClosingTicks = new ClosingTick[TFs];
+            CloseTick = new VariableSeries<bool>[TFs];
             HMA = new HullMovingAverage[TFs];
             PAL = new VariableSeries<double>[TFs];
 
@@ -789,16 +757,18 @@ namespace PowerLanguage.Indicator
                 ClosingTicks[timeframe] = new ClosingTick(this);
                 HMA[timeframe] = new HullMovingAverage(this);
                 PAL[timeframe] = new VariableSeries<double>(this);
+                CloseTick[timeframe] = new VariableSeries<bool>(this);
             }
         }
 
         double Alpha, Gain;
         double[] BarCount, Highs, Lows, Opens, Closes, Prices;
+        bool CurrTick, PrevTick;
         protected override void StartCalc()
         {
             if (Length < 1) Length = 1;
 
-            Alpha = 2.0 + (Length + 1.0);
+            Alpha = 2.0 / (Length + 1.0);
             Gain = Smooth / 100.0;
 
             BarCount = new double[TFs];
@@ -808,12 +778,109 @@ namespace PowerLanguage.Indicator
             Closes = new double[TFs];
             Prices = new double[TFs];
 
+            CurrTick = PrevTick = false;
+
             // properties
             for (int i = 0; i < TFs; i++)
                 HMA[i]._Length = Length;
 
-            for (int i = 0; i < TFs; i++)
-                ClosingTicks[i].Resolution = (EResolution)(3 + i);
+            GetTimeFramesForCalc();
+        }
+
+        private void GetTimeFramesForCalc()
+        {
+            ESymbolCategory category = Bars.Info.Category;
+            EResolution resolution = Bars.Info.Resolution.Type;
+            int resSize = (int)Bars.Info.Resolution.Size;
+
+            if (category == ESymbolCategory.Stock)
+            {
+                // base chart in minutes
+                if (resolution == EResolution.Minute)
+                {
+                    for (int i = 0; i < TFs; i++)
+                        ClosingTicks[i].Resolution = EResolution.Minute;
+
+                    ClosingTicks[TFs - 1].Resolution = EResolution.Day;
+
+                    switch (resSize)
+                    {
+                        default:
+                        case 0:
+                            break;
+
+                        case 5:
+                            ClosingTicks[1].ResolutionSize = 5;
+                            ClosingTicks[2].ResolutionSize = 60;
+                            ClosingTicks[3].ResolutionSize = 240;
+                            break;
+
+                        case 10:
+                            ClosingTicks[1].ResolutionSize = 10;
+                            ClosingTicks[2].ResolutionSize = 60;
+                            ClosingTicks[3].ResolutionSize = 240;
+                            break;
+
+                        case 15:
+                            ClosingTicks[1].ResolutionSize = 15;
+                            ClosingTicks[2].ResolutionSize = 60;
+                            ClosingTicks[3].ResolutionSize = 240;
+                            break;
+
+                        case 20:
+                            ClosingTicks[1].ResolutionSize = 20;
+                            ClosingTicks[2].ResolutionSize = 60;
+                            ClosingTicks[3].ResolutionSize = 240;
+                            break;
+
+                        case 30:
+                            ClosingTicks[1].ResolutionSize = 30;
+                            ClosingTicks[2].ResolutionSize = 60;
+                            ClosingTicks[3].ResolutionSize = 240;
+                            break;
+
+                        case 60:
+                            ClosingTicks[1].ResolutionSize = 60;
+                            ClosingTicks[2].ResolutionSize = 240;
+                            ClosingTicks[3].Resolution = EResolution.Day;
+                            ClosingTicks[4].Resolution = EResolution.Week;
+                            break;
+
+                        case 240:
+                            ClosingTicks[1].ResolutionSize = 240;
+                            ClosingTicks[2].Resolution = EResolution.Day;
+                            ClosingTicks[3].Resolution = EResolution.Week;
+                            ClosingTicks[4].Resolution = EResolution.Month;
+                            break;
+
+                    }
+                }
+
+                // base chart in day
+                else if (resolution == EResolution.Day)
+                {
+                    // day, week, month, year
+                    for (int i = 0; i < TFs; i++)
+                        ClosingTicks[i].Resolution = (EResolution)(3 + i);
+                }
+
+                foreach (var item in ClosingTicks)
+                {
+                    Print("Resolution: " + item.Resolution);
+                    Print("Resolution Size: " + item.ResolutionSize);
+                    Output.WriteLine("");
+                }
+            }
+
+            else if (category == ESymbolCategory.Forex)
+            {
+
+            }
+
+            else if (category == ESymbolCategory.Future)
+            {
+
+            }
         }
 
         protected override string CalcBar()
@@ -822,11 +889,15 @@ namespace PowerLanguage.Indicator
 
             for (int timeframe = 1; timeframe < TFs; timeframe++)
             {
-                SetPriceData(timeframe);
+                // optimization, cache variableseries
+                CurrTick = CloseTick[timeframe].Value = ClosingTicks[timeframe][0];
+                PrevTick = CloseTick[timeframe][1];
 
+                BuildMtfData(timeframe);
+                SetCalcPrice(timeframe);
                 SetPalValue(timeframe);
 
-                if (ClosingTicks[timeframe][0])
+                if (CurrTick)
                     BarCount[timeframe]++;
             }
 
@@ -835,41 +906,65 @@ namespace PowerLanguage.Indicator
 
         private void SetPalValue(int timeframe)
         {
-            if (ClosingTicks[timeframe].Value)
+            if (CurrTick)
             {
-                HMA[timeframe]._AddData(Closes[timeframe]);
+                HMA[timeframe]._AddData(Prices[timeframe]);
 
                 double hma = HMA[timeframe].Value;
 
-                //if (Closes[timeframe] - PAL[timeframe][1] > 0)
-                //{
-                //    // Gain < 0
-                //    PAL[timeframe].Value
-                //        = Alpha * (hma + (-Gain) * (hma - PAL[timeframe][1]))
-                //        + (1.0 - Alpha) * PAL[timeframe][1];
-                //}
-                //else if (Closes[timeframe] - PAL[timeframe][1] < 0)
-                //{
-                //    // Gain > 0
-                //    PAL[timeframe].Value
-                //       = Alpha * (hma + Gain * (hma - PAL[timeframe][1]))
-                //       + (1.0 - Alpha) * PAL[timeframe][1];
-                //}
-                //else
-                //{
-                //    // Gain = 0
-                //    PAL[timeframe].Value
-                //       = Alpha * (hma + 0.0 * (hma - PAL[timeframe][1]))
-                //       + (1.0 - Alpha) * PAL[timeframe][1];
-                //}
+                if (Prices[timeframe] - PAL[timeframe][1] > 0)
+                {
+                    // Gain < 0
+                    PAL[timeframe].Value
+                        = Alpha * (hma + (-Gain) * (hma - PAL[timeframe][1]))
+                        + (1.0 - Alpha) * PAL[timeframe][1];
+                }
+                else if (Prices[timeframe] - PAL[timeframe][1] < 0)
+                {
+                    // Gain > 0
+                    PAL[timeframe].Value
+                       = Alpha * (hma + Gain * (hma - PAL[timeframe][1]))
+                       + (1.0 - Alpha) * PAL[timeframe][1];
+                }
+                else
+                {
+                    // Gain = 0
+                    PAL[timeframe].Value
+                       = Alpha * (hma + 0.0 * (hma - PAL[timeframe][1]))
+                       + (1.0 - Alpha) * PAL[timeframe][1];
+                }
+
+                if (Bars.Time[0].Year >= 2021)
+                {
+                    if (timeframe == 1)
+                        Print("PAL 1: " + PAL[timeframe].Value);
+
+                    if (timeframe == 2)
+                        Print("PAL 2: " + PAL[timeframe].Value);
+
+                    if (timeframe == 3)
+                        Print("PAL 3: " + PAL[timeframe].Value);
+
+                    if (timeframe == 4)
+                        Print("PAL 4: " + PAL[timeframe].Value);
+                }
             }
         }
 
-        private void SetPriceData(int timeframe)
+        private void SetCalcPrice(int timeframe)
+        {
+            if (CurrTick)
+            {
+                // filter price type here
+                Prices[timeframe] = Closes[timeframe];
+            }
+        }
+
+        private void BuildMtfData(int timeframe)
         {
             if (BarCount[timeframe] > 0)
             {
-                if (ClosingTicks[timeframe][1])
+                if (PrevTick)
                 {
                     Highs[timeframe] = Bars.HighValue;
                     Lows[timeframe] = Bars.LowValue;
@@ -882,7 +977,7 @@ namespace PowerLanguage.Indicator
                     Lows[timeframe] = Math.Min(Bars.LowValue, Lows[timeframe]);
                 }
 
-                if (ClosingTicks[timeframe][0])
+                if (CurrTick)
                     Closes[timeframe] = Bars.CloseValue;
             }
         }
@@ -1194,8 +1289,6 @@ namespace PowerLanguage.Indicator
             }
 
             bool closingTick = false;
-
-            BankHolidays.GetHistoricalHolidays();
 
             // resolution filter
             switch (Resolution)
@@ -1561,12 +1654,14 @@ namespace PowerLanguage.Indicator
         List<IPlotObject> Plot;
         PriceActionLineMTF PAL;
         VariableSeries<double>[] PALs;
+        PriceActionLineF PAL_H;
         const int TFs = 5;
         protected override void Create()
         {
             // test objects, series will be called implicitly 
             PAL = new PriceActionLineMTF(this);
             PALs = new VariableSeries<double>[TFs];
+            PAL_H = new PriceActionLineF(this);
 
             for (int i = 0; i < TFs; i++)
             {
@@ -1599,15 +1694,15 @@ namespace PowerLanguage.Indicator
         protected override void StartCalc()
         {
             // set properties
-            PAL.Length = 6;
-            PAL.Smooth = 10;
+            PAL_H.Length = PAL.Length = 6;
+            PAL_H.Smooth = PAL.Smooth = 10;
         }
 
-        int Year;
         protected override void CalcBar()
         {
             if (Bars.CurrentBar == 2)
             {
+                // assign reference variables
                 PALs[1] = PAL.PAL_1;
                 PALs[2] = PAL.PAL_2;
                 PALs[3] = PAL.PAL_3;
@@ -1615,18 +1710,11 @@ namespace PowerLanguage.Indicator
 
             PAL.Call();
 
-            if (Bars.Time[0].Year >= 2019)
-            {
-                //Print("PAL_1: " + PALs[1].Value);
-                //Print("PAL_2: " + PALs[2].Value);
-                //Print("PAL_3: " + PALs[3].Value);
-            }
-
-            if (Bars.Time[0].Year != Year)
-            {
-                Output.WriteLine("");
-                Year = Bars.Time[0].Year;
-            }
+            Plot[1].Set(0, PALs[1][1]);
+            Plot[2].Set(0, PALs[2][1]);
+            Plot[3].Set(0, PALs[3][1]);
+            Plot[4].Set(0, PAL_H[1], Color.RoyalBlue);
+            //Plot[4].Set(PALs[4].Value);
 
         }
 
