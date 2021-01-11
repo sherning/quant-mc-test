@@ -921,6 +921,7 @@ namespace PowerLanguage.Function
                 CurrTick = CloseTick[timeframe].Value = ClosingTicks[timeframe][0];
                 PrevTick = CloseTick[timeframe][1];
 
+                // for each timeframe do the following
                 BuildMtfData(timeframe);
                 SetCalcPrice(timeframe);
                 CalcPalValue(timeframe);

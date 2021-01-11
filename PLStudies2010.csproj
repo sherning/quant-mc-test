@@ -324,6 +324,7 @@
     <Compile Include="_SherNing_Functions.Indicator.CS" />
     <Compile Include="_SherNing_Strategies.Strategy.CS" />
     <Compile Include="_SherNing_EconomicCalendar.Indicator.CS" />
+    <Compile Include="_SherNing_PAL_MTF.Indicator.CS" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
