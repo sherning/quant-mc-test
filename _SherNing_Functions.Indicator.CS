@@ -39,9 +39,6 @@ namespace PowerLanguage.Function
 
         List<DateTime> Dates;
         DateTime PrevTradingDay;
-        protected override void Create()
-        {
-        }
 
         protected override void StartCalc()
         {
@@ -558,12 +555,6 @@ namespace PowerLanguage.Function
         // Remarks      :
         //=========================================================================================
 
-        /*/
-         *======================================== Version ========================================
-         *  UpdateOnEveryTick = false
-         *======================================== Version ========================================
-        /*/
-
         public int _Length { get; set; }
         public HullMovingAverage(CStudyControl m) : base(m) { }
         public HullMovingAverage(CStudyControl m, bool auto) : base(m) { Auto = auto; }
@@ -730,25 +721,6 @@ namespace PowerLanguage.Function
 
             return -1;
         }
-
-        #region Print Functions
-        private bool DebugMode = true;
-        private void Print(string message)
-        {
-            // print messages if debug mode == true.
-            if (DebugMode == false) return;
-
-            // Print who is calling Print()
-            StackTrace stackTrace = new StackTrace();
-
-            Output.WriteLine("Project:  {0}   |   Caller:  {1}   |   Bar Time:  {2}   |   Message:  {3}",
-                Name,
-                stackTrace.GetFrame(1).GetMethod().Name,
-                Bars.TimeValue.ToString("dd-MM-yy HH:mm:ss tt"),
-                message);
-        }
-        #endregion
-
     }
 
     public sealed class PriceActionLineMTF : FunctionSimple<string>
@@ -1565,6 +1537,36 @@ namespace PowerLanguage.Function
         #endregion
 
     }
+
+    public sealed class TrendTemplateCriteria : FunctionSeries<int>
+    {
+        //================================= Project Documentation =================================
+        // Project Name : Closing Ticks
+        // Platform     : Multicharts
+        // Class Type   : Function
+        // Date         : 30 Dec 2020
+        // Developer    : Sher Ning
+        //=========================================================================================
+        // Copyright    : 2020, Sher Ning Technologies           
+        // License      : Internal use
+        // Client       : Sher Ning
+        // Contact      : sherning@hotmail.com
+        // Version      : v.1.0.0
+        //=========================================================================================
+        // References   : Mark Minervini stock selection criteria      
+        // Obectives    : 
+        // Remarks      : returns 8 if all criteria met
+        //=========================================================================================
+
+        public TrendTemplateCriteria(CStudyControl m) : base(m)
+        {
+            
+        }
+        protected override int CalcBar()
+        {
+            throw new NotImplementedException();
+        }
+    }
 }
 
 namespace PowerLanguage.Indicator
@@ -1585,7 +1587,7 @@ namespace PowerLanguage.Indicator
         //=========================================================================================
         // References   :       
         // Obectives    : Framework for building and testing functions
-        // Remarks      : Use this framework to build and test functions
+        // Remarks      : Use this framework to build and test functions before exporting
         //=========================================================================================
 
 

@@ -61,8 +61,10 @@ namespace PowerLanguage.Indicator
                 Plot[i] = AddPlot(new PlotAttributes(
                     plotNames[i], EPlotShapes.Line, 
                     Color.White, Color.Black, 
-                    3, EPlotStyle.Solid, true));
+                    1 + (2 * i), EPlotStyle.Solid, true));
             }
+
+            // note: changes made to create requires removing and reinserting indicator.
         }
         protected override void StartCalc()
         {
