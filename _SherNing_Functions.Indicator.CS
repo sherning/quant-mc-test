@@ -773,9 +773,14 @@ namespace PowerLanguage.Function
         public int Length { get; set; }
         public int Smooth { get; set; }
 
+        // function output
         public VariableSeries<double> PAL_1 { get { return PAL[1]; } }
+        public int TrendDir_1 { get { return TrendDirection[1][0]; } }
         public VariableSeries<double> PAL_2 { get { return PAL[2]; } }
+        public int TrendDir_2 { get { return TrendDirection[2][0]; } }
         public VariableSeries<double> PAL_3 { get { return PAL[3]; } }
+        public int TrendDir_3 { get { return TrendDirection[3][0]; } }
+
 
         public PriceActionLineMTF(CStudyControl m) : base(m) { }
 
@@ -787,12 +792,14 @@ namespace PowerLanguage.Function
         HullMovingAverage[] HMA;
         VariableSeries<double>[] PAL;
         VariableSeries<bool>[] CloseTick;
+        VariableSeries<int>[] TrendDirection;
         protected override void Create()
         {
             ClosingTicks = new ClosingTick[TFs];
             CloseTick = new VariableSeries<bool>[TFs];
             HMA = new HullMovingAverage[TFs];
             PAL = new VariableSeries<double>[TFs];
+            TrendDirection = new VariableSeries<int>[TFs];
 
             for (int timeframe = 0; timeframe < TFs; timeframe++)
             {
@@ -800,6 +807,7 @@ namespace PowerLanguage.Function
                 HMA[timeframe] = new HullMovingAverage(this);
                 PAL[timeframe] = new VariableSeries<double>(this);
                 CloseTick[timeframe] = new VariableSeries<bool>(this);
+                TrendDirection[timeframe] = new VariableSeries<int>(this);
             }
         }
 
@@ -915,7 +923,8 @@ namespace PowerLanguage.Function
 
                 BuildMtfData(timeframe);
                 SetCalcPrice(timeframe);
-                SetPalValue(timeframe);
+                CalcPalValue(timeframe);
+                SetTrendDirection(timeframe);
 
                 if (CurrTick)
                     BarCount[timeframe]++;
@@ -924,7 +933,22 @@ namespace PowerLanguage.Function
             return "No output";
         }
 
-        private void SetPalValue(int timeframe)
+        private void SetTrendDirection(int timeframe)
+        {
+            if (CurrTick)
+            {
+                if (PAL[timeframe][0] >= PAL[timeframe][1])
+                {
+                    TrendDirection[timeframe].Value = 1;
+                }
+                else
+                {
+                    TrendDirection[timeframe].Value = -1;
+                }
+            }
+        }
+
+        private void CalcPalValue(int timeframe)
         {
             if (CurrTick)
             {
@@ -1267,11 +1291,10 @@ namespace PowerLanguage.Function
         protected override void StartCalc()
         {
             Year = 0;
+
+            // special session end timing
             SpecialFutureCases.Add(new DateTime(2020, 11, 27, 13, 0, 0));
             SpecialFutureCases.Add(new DateTime(2020, 12, 24, 13, 0, 0));
-
-            // this should not be a special case, rather if tmr = holiday
-            SpecialFutureCases.Add(new DateTime(2020, 12, 31, 16, 0, 0));
         }
 
         protected override bool CalcBar()
@@ -1400,10 +1423,17 @@ namespace PowerLanguage.Function
             if (tomorrow.DayOfWeek == DayOfWeek.Saturday &&
                 sessionEnd) return true;
 
-            if (Bars.Info.Category == ESymbolCategory.Future && 
+            // today is 31 Dec and 1st is a Friday
+            if (today.Date == new DateTime(Bars.Time[0].Year, 12, 31) &&
+                tomorrow.DayOfWeek == DayOfWeek.Friday &&
+                sessionEnd)
+                return true;
+
+            // special cases
+            if (Bars.Info.Category == ESymbolCategory.Future &&
                 SpecialFutureCases.Contains(Bars.Time[0]))
                 return true;
-                
+
 
             return false;
         }
@@ -1565,6 +1595,7 @@ namespace PowerLanguage.Indicator
         List<IPlotObject> Plot;
         PriceActionLineMTF PAL;
         VariableSeries<double>[] PALs;
+        Color[] PlotColor;
         DataChecker DataCheck;
         const int TFs = 5;
         protected override void Create()
@@ -1573,6 +1604,7 @@ namespace PowerLanguage.Indicator
             PAL = new PriceActionLineMTF(this);
             PALs = new VariableSeries<double>[TFs];
             DataCheck = new DataChecker(this);
+            PlotColor = new Color[TFs];
 
             for (int i = 0; i < TFs; i++)
             {
@@ -1621,14 +1653,29 @@ namespace PowerLanguage.Indicator
 
             PAL.Call();
 
-            Plot[1].Set(0, PALs[1][0]);
-            Plot[2].Set(0, PALs[2][0]);
-            Plot[3].Set(0, PALs[3][0], Color.RoyalBlue);
+            if (PAL.TrendDir_1 == 1)
+                PlotColor[1] = Color.Green;
+            else
+                PlotColor[1] = Color.Red;
+
+            if (PAL.TrendDir_2 == 1)
+                PlotColor[2] = Color.Green;
+            else
+                PlotColor[2] = Color.Red;
+
+            if (PAL.TrendDir_3 == 1)
+                PlotColor[3] = Color.Green;
+            else
+                PlotColor[3] = Color.Red;
+
+            Plot[1].Set(0, PALs[1][0], PlotColor[1]);
+            Plot[2].Set(0, PALs[2][0], PlotColor[2]);
+            Plot[3].Set(0, PALs[3][0], PlotColor[3]);
 
             if (Bars.LastBarOnChart && Bars.Info.Category == ESymbolCategory.Future)
             {
-               // Print(Bars.Info.Description);
-               // DataCheck.PrintDates();
+                // Print(Bars.Info.Description);
+                // DataCheck.PrintDates();
             }
         }
 
