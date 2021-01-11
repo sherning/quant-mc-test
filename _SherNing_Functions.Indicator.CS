@@ -1594,23 +1594,10 @@ namespace PowerLanguage.Indicator
 
         IPlotObjectStr OutputStatus;
         List<IPlotObject> Plot;
-        PriceActionLineMTF PAL;
-        VariableSeries<double>[] PALs;
-        Color[] PlotColor;
-        DataChecker DataCheck;
-        const int TFs = 5;
         protected override void Create()
         {
             // test objects, series will be called implicitly 
-            PAL = new PriceActionLineMTF(this);
-            PALs = new VariableSeries<double>[TFs];
-            DataCheck = new DataChecker(this);
-            PlotColor = new Color[TFs];
 
-            for (int i = 0; i < TFs; i++)
-            {
-                PALs[i] = new VariableSeries<double>(this);
-            }
 
             // plot objects
             OutputStatus = AddPlot(new StringPlotAttributes(
@@ -1637,47 +1624,10 @@ namespace PowerLanguage.Indicator
 
         protected override void StartCalc()
         {
-            // set properties
-            PAL.Length = 6;
-            PAL.Smooth = 10;
         }
 
         protected override void CalcBar()
         {
-            if (Bars.CurrentBar == 2)
-            {
-                // assign reference variables
-                PALs[1] = PAL.PAL_1;
-                PALs[2] = PAL.PAL_2;
-                PALs[3] = PAL.PAL_3;
-            }
-
-            PAL.Call();
-
-            if (PAL.TrendDir_1 == 1)
-                PlotColor[1] = Color.Green;
-            else
-                PlotColor[1] = Color.Red;
-
-            if (PAL.TrendDir_2 == 1)
-                PlotColor[2] = Color.Green;
-            else
-                PlotColor[2] = Color.Red;
-
-            if (PAL.TrendDir_3 == 1)
-                PlotColor[3] = Color.Green;
-            else
-                PlotColor[3] = Color.Red;
-
-            Plot[1].Set(0, PALs[1][0], PlotColor[1]);
-            Plot[2].Set(0, PALs[2][0], PlotColor[2]);
-            Plot[3].Set(0, PALs[3][0], PlotColor[3]);
-
-            if (Bars.LastBarOnChart && Bars.Info.Category == ESymbolCategory.Future)
-            {
-                // Print(Bars.Info.Description);
-                // DataCheck.PrintDates();
-            }
         }
 
         #region Print Functions

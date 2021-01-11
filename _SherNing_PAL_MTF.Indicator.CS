@@ -23,7 +23,7 @@ namespace PowerLanguage.Indicator
         // References   : PriceActionLineMTF
         // Obectives    : Forex, Stock, Futures
         // Remarks      :
-        // Version      :
+        // Version      : v 1.0.0
         //=========================================================================================
 
         [Input] public string Settings { get; set; }
