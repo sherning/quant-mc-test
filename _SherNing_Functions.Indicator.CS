@@ -1544,6 +1544,7 @@ namespace PowerLanguage.Function
         // Project Name : Closing Ticks
         // Platform     : Multicharts
         // Class Type   : Function
+        // Chart Type   : All
         // Date         : 30 Dec 2020
         // Developer    : Sher Ning
         //=========================================================================================
@@ -1558,15 +1559,170 @@ namespace PowerLanguage.Function
         // Remarks      : returns 8 if all criteria met
         //=========================================================================================
 
-        public TrendTemplateCriteria(CStudyControl m) : base(m)
+        // output
+        public int Condition_1 { get { return Condition1(); } }
+        public int Condition_2 { get { return Condition2(); } }
+        public int Condition_3 { get { return Condition3(); } }
+        public int Condition_4 { get { return Condition4(); } }
+        public int Condition_5 { get { return Condition5(); } }
+        public int Condition_6 { get { return Condition6(); } }
+        public int Condition_7 { get { return Condition7(); } }
+
+
+        public TrendTemplateCriteria(CStudyControl m) : base(m) { }
+
+        const int NumAvgs = 4;
+        VariableSeries<double> Price;
+        VariableSeries<double>[] MA;
+        protected override void Create()
         {
-            
+            Price = new VariableSeries<double>(this);
+            MA = new VariableSeries<double>[NumAvgs];
+
+            for (int i = 1; i < NumAvgs; i++)
+                MA[i] = new VariableSeries<double>(this);
         }
+        
         protected override int CalcBar()
         {
-            throw new NotImplementedException();
+            Price.Value = Bars.Close[0];
+
+            MA[1].Value = MovingAverage(50);
+            MA[2].Value = MovingAverage(150);
+            MA[3].Value = MovingAverage(200);
+
+            int ret = Condition1() + Condition2() + Condition3() + Condition4()
+                + Condition5() + Condition6() + Condition7();
+
+            return ret;
         }
+
+        #region Conditions
+        private int Condition7()
+        {
+            // Price is trading above the 50 day MA coming out from base
+            if (Price[0] > MA[1][0])
+                return 1;
+
+            return 0;
+        }
+
+        private int Condition6()
+        {
+            // current price at least 25% from 52 weeks high
+            double high = HighestHigh(52 * 5);
+
+            high *= 0.75;
+
+            if (Price[0] > high) return 1;
+
+            return 0;
+        }
+
+        private int Condition5()
+        {
+            // current stock price is at least 25% above 52 weeks low
+            // 5 trading days a week, 52 weeks X 5
+            double low = LowestLow(52 * 5);
+
+            // 25% from lowest low
+            low *= 1.25;
+
+            if (Price[0] > low) return 1;
+
+            return 0;
+        }
+
+        private int Condition4()
+        {
+            // 50 day ma > 200 && > 150
+            if (MA[1][0] > MA[2][0] && MA[1][0] > MA[3][0])
+                return 1;
+
+            return 0;
+        }
+
+        private int Condition3()
+        {
+            // 200 day MA is trending up for at 
+            // least 1 month (20 trading days)
+            if (MA[3][0] - MA[3][20] > 0)
+                return 1;
+
+            return 0;
+        }
+
+        private int Condition2()
+        {
+            // 150 day moving average > 200 day MA
+            if (MA[2].Value > MA[3][0])
+                return 1;
+
+            return 0;
+        }
+
+        private int Condition1()
+        {
+            // stock price is above both 150 and 200 day moving avg
+            if (Price[0] > MA[2][0] && Price[0] > MA[3][0])
+                return 1;
+
+            return 0;
+        }
+        #endregion
+
+        #region Helper
+        private double MovingAverage(int length)
+        {
+            double sum = 0;
+
+            for (int i = 0; i < length; i++)
+                sum += Bars.Close[i];
+
+            return sum / length;
+        }
+
+        private double LowestLow(int length)
+        {
+            double low = double.MaxValue;
+
+            for (int i = 0; i < length; i++)
+                low = Math.Min(low, Bars.Low[i]);
+
+            return low;
+        }
+
+        private double HighestHigh(int length)
+        {
+            double high = 0;
+
+            for (int i = 0; i < length; i++)
+                high = Math.Max(high, Bars.High[i]);
+
+            return high;
+        }
+        #endregion
+
+        #region Print Functions
+        private bool DebugMode = true;
+        private void Print(string message)
+        {
+            // print messages if debug mode == true.
+            if (DebugMode == false) return;
+
+            // Print who is calling Print()
+            StackTrace stackTrace = new StackTrace();
+
+            Output.WriteLine("Project:  {0}   |   Caller:  {1}   |   Bar Time:  {2}   |   Message:  {3}",
+                Name,
+                stackTrace.GetFrame(1).GetMethod().Name,
+                Bars.TimeValue.ToString("dd-MM-yy HH:mm:ss tt"),
+                message);
+        }
+        #endregion
+
     }
+
 }
 
 namespace PowerLanguage.Indicator
@@ -1590,22 +1746,33 @@ namespace PowerLanguage.Indicator
         // Remarks      : Use this framework to build and test functions before exporting
         //=========================================================================================
 
-
+        /* NOTES
+           Function series, will be called once each bar implicitly
+        */
+        // do nothing
+        [Input] public int Length { get; set; }
 
         public _SherNing_Functions(object _ctx) : base(_ctx) { }
 
         IPlotObjectStr OutputStatus;
         List<IPlotObject> Plot;
+        TrendTemplateCriteria TTC;
+        IPlotObject PlotSingle;
+        TestSeries TSeries;
+        TestSimple TSimple;
         protected override void Create()
         {
-            // test objects, series will be called implicitly 
+            TSeries = new TestSeries(this);
+            TSimple = new TestSimple(this);
 
+
+            TTC = new TrendTemplateCriteria(this);
 
             // plot objects
             OutputStatus = AddPlot(new StringPlotAttributes(
                 "Output Status: ", Color.RoyalBlue, Color.Black));
 
-            Plot = new List<IPlotObject>();
+            //Plot = new List<IPlotObject>();
 
             string[] plotNames = new string[]
             {
@@ -1615,12 +1782,12 @@ namespace PowerLanguage.Indicator
             };
 
 
-            for (int i = 0; i <= 10; i++)
-            {
-                Plot.Add(AddPlot(new PlotAttributes(
-                    plotNames[i], EPlotShapes.Line, Color.White, Color.Black, 3, EPlotStyle.Solid, true)));
-            }
+            //for (int i = 0; i <= 10; i++)
+            //    Plot.Add(AddPlot(new PlotAttributes(
+            //        plotNames[i], EPlotShapes.Line, Color.White, Color.Black, 3, EPlotStyle.Solid, true)));
 
+
+            PlotSingle = AddPlot(new PlotAttributes("Single", EPlotShapes.Line, Color.RoyalBlue));
             Output.Clear();
         }
 
@@ -1630,6 +1797,7 @@ namespace PowerLanguage.Indicator
 
         protected override void CalcBar()
         {
+            PlotSingle.Set(TTC[0]);
         }
 
         #region Print Functions
@@ -1651,4 +1819,88 @@ namespace PowerLanguage.Indicator
         #endregion
     }
 }
+
+#region Test Functions
+namespace PowerLanguage.Function
+{
+    #region Understanding multicharts
+    public sealed class TestSeries : FunctionSeries<int>
+    {
+        public TestSeries(CStudyControl m) : base(m)
+        {
+
+        }
+        int Count;
+        protected override void StartCalc()
+        {
+            Count = 0;
+        }
+        protected override int CalcBar()
+        {
+            // every single call() or .value, will invoke CalcBar once
+            return Count++;
+        }
+
+        #region Print Functions
+        private bool DebugMode = true;
+        private void Print(string message)
+        {
+            // print messages if debug mode == true.
+            if (DebugMode == false) return;
+
+            // Print who is calling Print()
+            StackTrace stackTrace = new StackTrace();
+
+            Output.WriteLine("Project:  {0}   |   Caller:  {1}   |   Bar Time:  {2}   |   Message:  {3}",
+                Name,
+                stackTrace.GetFrame(1).GetMethod().Name,
+                Bars.TimeValue.ToString("dd-MM-yy HH:mm:ss tt"),
+                message);
+        }
+        #endregion
+    }
+
+    public sealed class TestSimple : FunctionSimple<int>
+    {
+        public TestSimple(CStudyControl m) : base(m)
+        {
+
+        }
+        int Count;
+        protected override void StartCalc()
+        {
+            // TestSimple initialize once, state will not reset when start calc is called.
+            Count = 0;
+        }
+        protected override int CalcBar()
+        {
+            // calcbar will be called explicitly
+            return Count++;
+        }
+
+        #region Print Functions
+        private bool DebugMode = true;
+        private void Print(string message)
+        {
+            // print messages if debug mode == true.
+            if (DebugMode == false) return;
+
+            // Print who is calling Print()
+            StackTrace stackTrace = new StackTrace();
+
+            Output.WriteLine("Project:  {0}   |   Caller:  {1}   |   Bar Time:  {2}   |   Message:  {3}",
+                Name,
+                stackTrace.GetFrame(1).GetMethod().Name,
+                Bars.TimeValue.ToString("dd-MM-yy HH:mm:ss tt"),
+                message);
+        }
+        #endregion
+
+    }
+    #endregion
+
+}
+
+#endregion
+
 
