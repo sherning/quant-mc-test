@@ -1745,28 +1745,15 @@ namespace PowerLanguage.Indicator
         // Obectives    : Framework for building and testing functions
         // Remarks      : Use this framework to build and test functions before exporting
         //=========================================================================================
-
-        /* NOTES
-           Function series, will be called once each bar implicitly
-        */
-        // do nothing
-        [Input] public int Length { get; set; }
+       
 
         public _SherNing_Functions(object _ctx) : base(_ctx) { }
 
         IPlotObjectStr OutputStatus;
         List<IPlotObject> Plot;
-        TrendTemplateCriteria TTC;
         IPlotObject PlotSingle;
-        TestSeries TSeries;
-        TestSimple TSimple;
         protected override void Create()
         {
-            TSeries = new TestSeries(this);
-            TSimple = new TestSimple(this);
-
-
-            TTC = new TrendTemplateCriteria(this);
 
             // plot objects
             OutputStatus = AddPlot(new StringPlotAttributes(
@@ -1797,7 +1784,6 @@ namespace PowerLanguage.Indicator
 
         protected override void CalcBar()
         {
-            PlotSingle.Set(TTC[0]);
         }
 
         #region Print Functions
