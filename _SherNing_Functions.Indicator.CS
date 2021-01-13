@@ -1582,7 +1582,7 @@ namespace PowerLanguage.Function
             for (int i = 1; i < NumAvgs; i++)
                 MA[i] = new VariableSeries<double>(this);
         }
-        
+
         protected override int CalcBar()
         {
             Price.Value = Bars.Close[0];
@@ -1723,6 +1723,153 @@ namespace PowerLanguage.Function
 
     }
 
+    public sealed class VolumeNormalised : FunctionSeries<double>
+    {
+        bool DebugMode = true;
+
+        //================================= Project Documentation =================================
+        // Project Name : Volume Normalised
+        // Platform     : Multicharts
+        // Class Type   : Function
+        // Chart Type   : Daily charts with volume information
+        // Date         : 13 Jan 2021
+        // Developer    : Sher Ning
+        //=========================================================================================
+        // Copyright    : 2020, Sher Ning Technologies           
+        // License      : Internal use
+        // Client       : Sher Ning
+        // Contact      : sherning@hotmail.com
+        // Version      : v.1.0.0
+        //=========================================================================================
+        // References   :       
+        // Obectives    : 
+        // Remarks      : 
+        //=========================================================================================
+
+        public int Length { get; set; }
+        public VolumeNormalised(CStudyControl m) : base(m) { }
+
+        List<double>[] DayOfWeekVolume;
+        ClosingTick BarClosingTick;
+        protected override void Create()
+        {
+            // mon to fri, skip [0]
+            DayOfWeekVolume = new List<double>[6];
+            BarClosingTick = new ClosingTick(this);
+        }
+
+        protected override void StartCalc()
+        {
+            if (Length < 1) Length = 1;
+
+            for (int i = 0; i <= 5; i++)
+                DayOfWeekVolume[i] = new List<double>(Length);
+
+            BarClosingTick.Resolution = Bars.Info.Resolution.Type;
+            BarClosingTick.ResolutionSize = (int)Bars.Info.Resolution.Size;
+        }
+        protected override double CalcBar()
+        {
+            // calculate end of bar
+            if (Bars.Status != EBarState.Close) return 0;
+
+            DateTime today = Bars.Time[0];
+            double vol = Bars.Volume[0];
+            double ret = 0;
+
+            if (BarClosingTick.Value)
+            {
+                switch (today.DayOfWeek)
+                {
+                    default:
+                    case DayOfWeek.Saturday:
+                    case DayOfWeek.Sunday:
+                        break;
+
+                    case DayOfWeek.Monday:
+                        {
+                            AddData(DayOfWeekVolume[1], vol);
+                            ret = CalcData(DayOfWeekVolume[1]);
+                            break;
+                        }
+
+                    case DayOfWeek.Tuesday:
+                        {
+                            AddData(DayOfWeekVolume[2], vol);
+                            ret = CalcData(DayOfWeekVolume[2]);
+                            break;
+                        }
+                    case DayOfWeek.Wednesday:
+                        {
+                            AddData(DayOfWeekVolume[3], vol);
+                            ret = CalcData(DayOfWeekVolume[3]);
+                            break;
+                        }
+                    case DayOfWeek.Thursday:
+                        {
+                            AddData(DayOfWeekVolume[4], vol);
+                            ret = CalcData(DayOfWeekVolume[4]);
+                            break;
+                        }
+                    case DayOfWeek.Friday:
+                        {
+                            AddData(DayOfWeekVolume[5], vol);
+                            ret = CalcData(DayOfWeekVolume[5]);
+                            break;
+                        }
+                }
+            }
+
+            return ret != -1 ? ret : 0;
+        }
+
+        #region Calculations
+        private double CalcData(List<double> list)
+        {
+            if (list.Count >= Length)
+            {
+                double vol = 0;
+
+                // exclude current day's volume
+                for (int i = 0; i < Length; i++)
+                    vol += list[i];
+
+                // average volume
+                vol /= Length;
+
+                // curr volume / mean of past volume
+                return list[Length] / vol;
+            }
+
+            return -1;
+        }
+        private void AddData(List<double> list, double vol)
+        {
+            if (list.Count > Length)
+                list.RemoveAt(0);
+
+            list.Add(vol);
+        }
+
+        #endregion
+
+        #region Print Functions
+        private void Print(string message)
+        {
+            // print messages if debug mode == true.
+            if (DebugMode == false) return;
+
+            // Print who is calling Print()
+            StackTrace stackTrace = new StackTrace();
+
+            Output.WriteLine("Project:  {0}   |   Caller:  {1}   |   Bar Time:  {2}   |   Message:  {3}",
+                Name,
+                stackTrace.GetFrame(1).GetMethod().Name,
+                Bars.TimeValue.ToString("dd-MM-yy HH:mm:ss tt"),
+                message);
+        }
+        #endregion
+    }
 }
 
 namespace PowerLanguage.Indicator
@@ -1745,15 +1892,17 @@ namespace PowerLanguage.Indicator
         // Obectives    : Framework for building and testing functions
         // Remarks      : Use this framework to build and test functions before exporting
         //=========================================================================================
-       
+
 
         public _SherNing_Functions(object _ctx) : base(_ctx) { }
 
         IPlotObjectStr OutputStatus;
         List<IPlotObject> Plot;
         IPlotObject PlotSingle;
+        VolumeNormalised VolNorm;
         protected override void Create()
         {
+            VolNorm = new VolumeNormalised(this);
 
             // plot objects
             OutputStatus = AddPlot(new StringPlotAttributes(
@@ -1780,10 +1929,12 @@ namespace PowerLanguage.Indicator
 
         protected override void StartCalc()
         {
+            VolNorm.Length = 5;
         }
 
         protected override void CalcBar()
         {
+            PlotSingle.Set(VolNorm.Value);
         }
 
         #region Print Functions
