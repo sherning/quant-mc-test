@@ -1743,7 +1743,7 @@ namespace PowerLanguage.Function
         //=========================================================================================
         // References   :       
         // Obectives    : 
-        // Remarks      : 
+        // Remarks      : Check the number of bars required for calculation
         //=========================================================================================
 
         public int Length { get; set; }
@@ -1758,6 +1758,7 @@ namespace PowerLanguage.Function
             BarClosingTick = new ClosingTick(this);
         }
 
+        int BarsRequired;
         protected override void StartCalc()
         {
             if (Length < 1) Length = 1;
@@ -1765,8 +1766,12 @@ namespace PowerLanguage.Function
             for (int i = 0; i <= 5; i++)
                 DayOfWeekVolume[i] = new List<double>(Length);
 
+            // designed for daily charts
             BarClosingTick.Resolution = Bars.Info.Resolution.Type;
             BarClosingTick.ResolutionSize = (int)Bars.Info.Resolution.Size;
+
+            // there is no reference for bars back, therefore, maxbarsback = 0
+            BarsRequired = Length * 6;
         }
         protected override double CalcBar()
         {
@@ -1792,7 +1797,6 @@ namespace PowerLanguage.Function
                             ret = CalcData(DayOfWeekVolume[1]);
                             break;
                         }
-
                     case DayOfWeek.Tuesday:
                         {
                             AddData(DayOfWeekVolume[2], vol);
@@ -1826,7 +1830,7 @@ namespace PowerLanguage.Function
         #region Calculations
         private double CalcData(List<double> list)
         {
-            if (list.Count >= Length)
+            if (list.Count >= Length && Bars.CurrentBar >= BarsRequired)
             {
                 double vol = 0;
 
@@ -1923,7 +1927,7 @@ namespace PowerLanguage.Indicator
             //        plotNames[i], EPlotShapes.Line, Color.White, Color.Black, 3, EPlotStyle.Solid, true)));
 
 
-            PlotSingle = AddPlot(new PlotAttributes("Single", EPlotShapes.Line, Color.RoyalBlue));
+            PlotSingle = AddPlot(new PlotAttributes("Single", EPlotShapes.Histogram, Color.RoyalBlue));
             Output.Clear();
         }
 
