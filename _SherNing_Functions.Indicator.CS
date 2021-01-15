@@ -555,33 +555,33 @@ namespace PowerLanguage.Function
         // Remarks      :
         //=========================================================================================
 
-        public int _Length { get; set; }
+        public int Length { get; set; }
         public HullMovingAverage(CStudyControl m) : base(m) { }
         public HullMovingAverage(CStudyControl m, bool auto) : base(m) { Auto = auto; }
 
 
         // fields
-        int[] Length;
+        int[] LengthArr;
         List<double>[] PriceLists;
         bool Auto;
 
         protected override void StartCalc()
         {
-            if (_Length < 1) _Length = 1;
+            if (Length < 1) Length = 1;
 
             // Length[1], Length[2], Length[3]
-            Length = new int[4];
+            LengthArr = new int[4];
 
             // calculate only when there is a change in _Length value 
             int halvedLength;
 
-            if ((Math.Ceiling((double)(_Length / 2)) - (_Length / 2)) <= 0.5)
-                halvedLength = (int)Math.Ceiling((double)(_Length / 2));
+            if ((Math.Ceiling((double)(Length / 2)) - (Length / 2)) <= 0.5)
+                halvedLength = (int)Math.Ceiling((double)(Length / 2));
             else
-                halvedLength = (int)Math.Floor((double)(_Length / 2));
+                halvedLength = (int)Math.Floor((double)(Length / 2));
 
             int sqrRootLength;
-            double sqLength = Math.Sqrt(_Length);
+            double sqLength = Math.Sqrt(Length);
 
             if ((Math.Ceiling(sqLength) - sqLength) <= 0.5)
                 sqrRootLength = (int)Math.Ceiling(sqLength);
@@ -589,9 +589,9 @@ namespace PowerLanguage.Function
                 sqrRootLength = (int)Math.Floor(sqLength);
 
             //Lengths[0] = 0 by default
-            Length[1] = halvedLength;
-            Length[2] = _Length;
-            Length[3] = sqrRootLength;
+            LengthArr[1] = halvedLength;
+            LengthArr[2] = Length;
+            LengthArr[3] = sqrRootLength;
 
             // create an array of 4 price list.
             PriceLists = new List<double>[4];
@@ -602,41 +602,41 @@ namespace PowerLanguage.Function
             PriceLists[3] = new List<double>();
         }
 
-        public void _AddData(double data)
+        public void AddData(double data)
         {
             // using insert method, i got to take caution.
             PriceLists[1].Insert(0, data);
             PriceLists[2].Insert(0, data);
 
             // clean up list for unwanted values
-            if (PriceLists[1].Count > Length[1])
-                PriceLists[1].RemoveAt(Length[1]);
+            if (PriceLists[1].Count > LengthArr[1])
+                PriceLists[1].RemoveAt(LengthArr[1]);
 
-            if (PriceLists[2].Count > Length[2])
-                PriceLists[2].RemoveAt(Length[2]);
+            if (PriceLists[2].Count > LengthArr[2])
+                PriceLists[2].RemoveAt(LengthArr[2]);
         }
         protected override double CalcBar()
         {
-            if (Auto) _AddData(Bars.CloseValue);
+            if (Auto) AddData(Bars.CloseValue);
 
             // insufficient data
-            if (PriceLists[2].Count < _Length) return -1;
+            if (PriceLists[2].Count < Length) return -1;
 
             // calculate 
-            double wma1 = 2.0 * WeightedAverage(PriceLists[1], Length[1]);
-            double wma2 = WeightedAverage(PriceLists[2], Length[2]);
+            double wma1 = 2.0 * WeightedAverage(PriceLists[1], LengthArr[1]);
+            double wma2 = WeightedAverage(PriceLists[2], LengthArr[2]);
 
             // add the calculated data to pricelist 3
             PriceLists[3].Insert(0, wma1 - wma2);
 
             // check for sufficient data
-            if (PriceLists[3].Count > Length[3])
+            if (PriceLists[3].Count > LengthArr[3])
             {
                 // clean up list for unwanted values
-                PriceLists[3].RemoveAt(Length[3]);
+                PriceLists[3].RemoveAt(LengthArr[3]);
 
                 // calculate the weighted average and return.
-                return WeightedAverage(PriceLists[3], Length[3]);
+                return WeightedAverage(PriceLists[3], LengthArr[3]);
             }
 
             return -1;
@@ -679,12 +679,14 @@ namespace PowerLanguage.Function
 
         public int Length { get; set; }
         public int Smooth { get; set; }
+        public ISeries<double> Price { get; set; }
+
         public PriceActionLineF(CStudyControl m) : base(m) { }
 
         HullMovingAverage HMA;
         protected override void Create()
         {
-            HMA = new HullMovingAverage(this, true);
+            HMA = new HullMovingAverage(this);
         }
 
         double Alpha, Gain;
@@ -698,20 +700,23 @@ namespace PowerLanguage.Function
             Gain = Smooth / 100.0;
 
             // HMA Properties
-            HMA._Length = Length;
+            HMA.Length = Length;
         }
 
         protected override double CalcBar()
         {
             if (Bars.Status == EBarState.Close)
             {
-                double close = Bars.CloseValue;
+                double price = Price.Value;
+                HMA.AddData(price);
+
+                // cache
                 double hmaValue = HMA.Value;
 
-                if (close - this[1] > 0)
+                if (price - this[1] > 0)
                     // -ve gain
                     return Alpha * (hmaValue + (-Gain) * (hmaValue - this[1])) + (1.0 - Alpha) * this[1];
-                else if (close - this[1] < 0)
+                else if (price - this[1] < 0)
                     // +ve gain
                     return Alpha * (hmaValue + (Gain) * (hmaValue - this[1])) + (1.0 - Alpha) * this[1];
                 else
@@ -804,7 +809,7 @@ namespace PowerLanguage.Function
 
             // properties
             for (int i = 0; i < TFs; i++)
-                HMA[i]._Length = Length;
+                HMA[i].Length = Length;
 
             GetTimeFramesForCalc();
         }
@@ -925,7 +930,7 @@ namespace PowerLanguage.Function
         {
             if (CurrTick)
             {
-                HMA[timeframe]._AddData(Prices[timeframe]);
+                HMA[timeframe].AddData(Prices[timeframe]);
 
                 double hma = HMA[timeframe].Value;
 
@@ -1921,12 +1926,9 @@ namespace PowerLanguage.Indicator
         IPlotObjectStr OutputStatus;
         List<IPlotObject> Plot;
         IPlotObject PlotSingle;
-        TestSeries Test1, Test2;
 
         protected override void Create()
         {
-            Test1 = new TestSeries(this);
-            Test2 = new TestSeries(this);
 
             // plot objects
             OutputStatus = AddPlot(new StringPlotAttributes(
@@ -1953,22 +1955,11 @@ namespace PowerLanguage.Indicator
 
         protected override void StartCalc()
         {
-            ExecInfo.MaxBarsBack = 3;
         }
 
         protected override void CalcBar()
         {
-            if (Bars.LastBarOnChart)
-            {
-                Print("Test1: " + Test1.Value);
-                Print("Test2: " + Test2.Value);
-                Print("Test2[1]: " + Test2[1] );
-                Print("Test2[1]: " + Test2[2] );
-                Print("Test2[1]: " + Test2[3] );
-                Print("Test2[1]: " + Test2[1] );
-                Print("Test2[1]: " + Test2[0] );
-                Print("Test2[1]: " + Test2[1]);
-            }
+           
         }
 
         #region Print Functions

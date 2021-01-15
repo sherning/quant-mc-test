@@ -49,13 +49,15 @@ namespace PowerLanguage.Indicator
             ShowFiftyPercent = true;
             ShowHundredPercent = true;
 
-            AvgLength = Length;
+            AvgLength = 6;
         }
 
         private VolumeNormalised VolNorm;
         private IPlotObject[] Plot;
         private IPlotObjectStr CalcModeStatus;
         private VariableSeries<double> VolNormVar;
+        private PriceActionLineF Pal;
+
         protected override void Create()
         {
             Plot = new IPlotObject[5];
@@ -69,11 +71,17 @@ namespace PowerLanguage.Indicator
 
             VolNorm = new VolumeNormalised(this);
             VolNormVar = new VariableSeries<double>(this);
+            Pal = new PriceActionLineF(this);
         }
         protected override void StartCalc()
         {
+            if (Length < 1) Length = 1;
             VolNorm.Length = Length;
             VolNorm.CalcMode = CalcMode;
+
+            Pal.Length = AvgLength;
+            Pal.Smooth = 10;
+            Pal.Price = VolNormVar;
         }
         protected override void CalcBar()
         {
@@ -108,16 +116,7 @@ namespace PowerLanguage.Indicator
                 CalcModeStatus.Set(CalcMode2);
 
             if (AvgLength > 0)
-                Plot[4].Set(Average());
-        }
-
-        private double Average()
-        {
-            double ret = 0;
-            for (int i = 0; i < AvgLength; i++)
-                ret += VolNormVar[i];
-
-            return ret / AvgLength;
+                Plot[4].Set(Pal.Value);
         }
     }
 }
