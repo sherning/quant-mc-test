@@ -1747,6 +1747,7 @@ namespace PowerLanguage.Function
         //=========================================================================================
 
         public int Length { get; set; }
+        public int CalcMode { get; set; }
         public VolumeNormalised(CStudyControl m) : base(m) { }
 
         List<double>[] DayOfWeekVolume;
@@ -1784,43 +1785,52 @@ namespace PowerLanguage.Function
 
             if (BarClosingTick.Value)
             {
-                switch (today.DayOfWeek)
+                if (CalcMode == 2)
                 {
-                    default:
-                    case DayOfWeek.Saturday:
-                    case DayOfWeek.Sunday:
-                        break;
+                    // caculate using day of week average
+                    switch (today.DayOfWeek)
+                    {
+                        default:
+                        case DayOfWeek.Saturday:
+                        case DayOfWeek.Sunday:
+                            break;
 
-                    case DayOfWeek.Monday:
-                        {
-                            AddData(DayOfWeekVolume[1], vol);
-                            ret = CalcData(DayOfWeekVolume[1]);
-                            break;
-                        }
-                    case DayOfWeek.Tuesday:
-                        {
-                            AddData(DayOfWeekVolume[2], vol);
-                            ret = CalcData(DayOfWeekVolume[2]);
-                            break;
-                        }
-                    case DayOfWeek.Wednesday:
-                        {
-                            AddData(DayOfWeekVolume[3], vol);
-                            ret = CalcData(DayOfWeekVolume[3]);
-                            break;
-                        }
-                    case DayOfWeek.Thursday:
-                        {
-                            AddData(DayOfWeekVolume[4], vol);
-                            ret = CalcData(DayOfWeekVolume[4]);
-                            break;
-                        }
-                    case DayOfWeek.Friday:
-                        {
-                            AddData(DayOfWeekVolume[5], vol);
-                            ret = CalcData(DayOfWeekVolume[5]);
-                            break;
-                        }
+                        case DayOfWeek.Monday:
+                            {
+                                AddData(DayOfWeekVolume[1], vol);
+                                ret = CalcData(DayOfWeekVolume[1]);
+                                break;
+                            }
+                        case DayOfWeek.Tuesday:
+                            {
+                                AddData(DayOfWeekVolume[2], vol);
+                                ret = CalcData(DayOfWeekVolume[2]);
+                                break;
+                            }
+                        case DayOfWeek.Wednesday:
+                            {
+                                AddData(DayOfWeekVolume[3], vol);
+                                ret = CalcData(DayOfWeekVolume[3]);
+                                break;
+                            }
+                        case DayOfWeek.Thursday:
+                            {
+                                AddData(DayOfWeekVolume[4], vol);
+                                ret = CalcData(DayOfWeekVolume[4]);
+                                break;
+                            }
+                        case DayOfWeek.Friday:
+                            {
+                                AddData(DayOfWeekVolume[5], vol);
+                                ret = CalcData(DayOfWeekVolume[5]);
+                                break;
+                            }
+                    }
+
+                }
+                else if (CalcMode == 1)
+                {
+                    ret = vol / Average();
                 }
             }
 
@@ -1828,6 +1838,14 @@ namespace PowerLanguage.Function
         }
 
         #region Calculations
+        private double Average()
+        {
+            double ret = 0;
+            for (int i = 1; i <= Length; i++)
+                ret += Bars.Volume[Length];
+
+            return ret / Length;
+        }
         private double CalcData(List<double> list)
         {
             if (list.Count >= Length && Bars.CurrentBar >= BarsRequired)
@@ -1934,6 +1952,7 @@ namespace PowerLanguage.Indicator
         protected override void StartCalc()
         {
             VolNorm.Length = 5;
+            VolNorm.CalcMode = 2;
         }
 
         protected override void CalcBar()
