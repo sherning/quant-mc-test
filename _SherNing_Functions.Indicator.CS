@@ -1921,10 +1921,12 @@ namespace PowerLanguage.Indicator
         IPlotObjectStr OutputStatus;
         List<IPlotObject> Plot;
         IPlotObject PlotSingle;
-        VolumeNormalised VolNorm;
+        TestSeries Test1, Test2;
+
         protected override void Create()
         {
-            VolNorm = new VolumeNormalised(this);
+            Test1 = new TestSeries(this);
+            Test2 = new TestSeries(this);
 
             // plot objects
             OutputStatus = AddPlot(new StringPlotAttributes(
@@ -1951,13 +1953,22 @@ namespace PowerLanguage.Indicator
 
         protected override void StartCalc()
         {
-            VolNorm.Length = 5;
-            VolNorm.CalcMode = 2;
+            ExecInfo.MaxBarsBack = 3;
         }
 
         protected override void CalcBar()
         {
-            PlotSingle.Set(VolNorm.Value);
+            if (Bars.LastBarOnChart)
+            {
+                Print("Test1: " + Test1.Value);
+                Print("Test2: " + Test2.Value);
+                Print("Test2[1]: " + Test2[1] );
+                Print("Test2[1]: " + Test2[2] );
+                Print("Test2[1]: " + Test2[3] );
+                Print("Test2[1]: " + Test2[1] );
+                Print("Test2[1]: " + Test2[0] );
+                Print("Test2[1]: " + Test2[1]);
+            }
         }
 
         #region Print Functions
