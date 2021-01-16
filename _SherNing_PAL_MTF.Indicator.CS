@@ -29,12 +29,21 @@ namespace PowerLanguage.Indicator
         [Input] public string Settings { get; set; }
         [Input] public int Length { get; set; }
         [Input] public int Smooth { get; set; }
+        [Input] public string DisplaySettings { get; set; }
+        [Input] public bool ShowTF_1 { get; set; }
+        [Input] public bool ShowTF_2 { get; set; }
+        [Input] public bool ShowTF_3 { get; set; }
 
-        public _SherNing_PAL_MTF(object _ctx) : base(_ctx) 
+        public _SherNing_PAL_MTF(object _ctx) : base(_ctx)
         {
             Settings = "Indicator Settings";
             Length = 6;
             Smooth = 10;
+
+            DisplaySettings = "Display On/Off";
+            ShowTF_1 = true;
+            ShowTF_2 = true;
+            ShowTF_3 = true;
         }
 
         PriceActionLineMTF PalFunc;
@@ -59,8 +68,8 @@ namespace PowerLanguage.Indicator
             for (int i = 0; i < 5; i++)
             {
                 Plot[i] = AddPlot(new PlotAttributes(
-                    plotNames[i], EPlotShapes.Line, 
-                    Color.White, Color.Black, 
+                    plotNames[i], EPlotShapes.Line,
+                    Color.White, Color.Black,
                     1 + (2 * i), EPlotStyle.Solid, true));
             }
 
@@ -97,9 +106,14 @@ namespace PowerLanguage.Indicator
             else
                 PlotColor[3] = Color.Red;
 
-            Plot[1].Set(0, PAL[1][0], PlotColor[1]);
-            Plot[2].Set(0, PAL[2][0], PlotColor[2]);
-            Plot[3].Set(0, PAL[3][0], PlotColor[3]);
+            if (ShowTF_1)
+                Plot[1].Set(0, PAL[1][0], PlotColor[1]);
+
+            if (ShowTF_2)
+                Plot[2].Set(0, PAL[2][0], PlotColor[2]);
+
+            if (ShowTF_3)
+                Plot[3].Set(0, PAL[3][0], PlotColor[3]);
         }
     }
 }

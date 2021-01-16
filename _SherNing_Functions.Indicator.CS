@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Windows.Forms;
 using PowerLanguage.Function;
 
@@ -1897,6 +1898,325 @@ namespace PowerLanguage.Function
         }
         #endregion
     }
+
+    public sealed class AutoPositionSizing : FunctionSimple<string>
+    {
+        //================================= Project Documentation =================================
+        // Project Name : Auto Position Sizing
+        // Platform     : Multicharts
+        // Class Type   : Function Simple
+        // Chart Type   : Any chart type
+        // Date         : 16 Jan 2021
+        // Developer    : Sher Ning
+        //=========================================================================================
+        // Copyright    : 2020, Sher Ning Technologies           
+        // License      : Internal use
+        // Client       : Sher Ning
+        // Contact      : sherning@hotmail.com
+        // Version      : v.1.0.0
+        //=========================================================================================
+        // References   :       
+        // Obectives    : 
+        // Returns      : Maximum contracts for a given risk 
+        // Remarks      : For forex, update quote manager minimum move to 1
+        //=========================================================================================
+
+        /// <summary>
+        /// Account Size, e.g. 100,000 = $100,000
+        /// </summary>
+        public double AccountSize { get; set; }
+        /// <summary>
+        /// Risk in percentage, e.g. 2 = 2%
+        /// </summary>
+        public double Risk { get; set; }
+        public AutoPositionSizing(CStudyControl m) : base(m) { }
+
+        Dictionary<string, double> PipValues;
+        protected override void Create()
+        {
+            PipValues = new Dictionary<string, double>();
+        }
+
+        ESymbolCategory Category;
+        string BaseSymbol;
+        int MinimumContracts, MaximumContracts, StepSize;
+        double DollarRisk;
+
+        protected override void StartCalc()
+        {
+            // Bars first accessible only in StartCalc()
+            Category = Bars.Info.Category;
+
+            if (Category == ESymbolCategory.Cash || Category == ESymbolCategory.Forex)
+            {
+                GetPipValues();
+                MinimumContracts = 20000;
+                MaximumContracts = 10000000;
+            }
+            else if (Category == ESymbolCategory.Stock)
+            {
+                MinimumContracts = 10;
+                MaximumContracts = 10000;
+            }
+            else if (Category == ESymbolCategory.Future)
+            {
+                // incomplete
+                MinimumContracts = 1;
+                MaximumContracts = 1000;
+
+                Print("Info: " + GetTickValue(1));
+            }
+
+            StepSize = MinimumContracts;
+            DollarRisk = AccountSize * Risk * 0.01;
+        }
+
+        protected override string CalcBar()
+        {
+            return "Calculates the optimal position size for current trade";
+        }
+
+        /// <summary>
+        /// Return the optimal contracts allowed for a given risk
+        /// </summary>
+        /// <param name="entryPrice"></param>
+        /// <param name="stopLossPrice"></param>
+        /// <returns></returns>
+        public int Contracts(double entryPrice, double stopLossPrice)
+        {
+            // Check if entry price or stop loss price is 0
+            if (entryPrice == 0 || stopLossPrice == 0) return 0;
+
+            // return tradesize
+            int tradeSize;
+            double rawTradeSize = 0;
+
+            // calculate price risk
+            double priceRisk = Math.Abs(entryPrice - stopLossPrice);
+            priceRisk = Math.Round(priceRisk, 5);
+
+            // get raw trade size
+            if (Category == ESymbolCategory.Cash || Category == ESymbolCategory.Forex)
+            {
+                // Get pip values.
+                GetPipValues();
+
+                // get fx calculation values
+                double onePip = GetTickValue(10);
+                double pipValue = PipValues[BaseSymbol];
+
+                // calculate numerator and denominator values
+                double valueRisk = (priceRisk / onePip) * pipValue;
+
+                // obtain raw trade size
+                rawTradeSize = (DollarRisk / valueRisk) * 100000;
+               
+            }
+            else if (Category == ESymbolCategory.Stock)
+            {
+                rawTradeSize = DollarRisk / priceRisk;
+            }
+            else if (Category == ESymbolCategory.Future)
+            {
+                // incomplete
+                double oneTick = GetTickValue(1);
+                double valueRisk = priceRisk / oneTick * 12.5;
+
+                rawTradeSize = DollarRisk / valueRisk;
+            }
+
+            // convert to min step
+            rawTradeSize = StepSize * Math.Floor(rawTradeSize / StepSize);
+
+            // check if min < contracts < max 
+            if (rawTradeSize < MinimumContracts) rawTradeSize = 0;
+            if (rawTradeSize > MaximumContracts) rawTradeSize = MaximumContracts;
+
+            // round down 
+            tradeSize = (int)rawTradeSize;
+            return tradeSize;
+        }
+
+        #region Forex
+        private void GetPipValues()
+        {
+            // clear all the data at the end of the session.
+            // calculate end of session time.
+            int sessionEndTime = 100 * (Bars.Sessions[0].EndTime.Hours) + Bars.Sessions[0].EndTime.Minutes;
+            int currentSessionTime = 100 * (Bars.Time[0].Hour) + Bars.Time[0].Minute;
+
+            // if current session time = end time, clear data.
+            if (currentSessionTime == sessionEndTime) PipValues.Clear();
+
+            string chartSymbol = Bars.Info.RTSymbolName;
+            ESymbolCategory category = Bars.Info.Category;
+
+            // current chart base symbols
+            string[] _baseSymbol = chartSymbol.Split('.');
+            string baseSymbol = _baseSymbol[1];
+
+            // cache base symbol
+            BaseSymbol = baseSymbol;
+
+            // list of major forex base symbols
+            string[] baseSymbols = { "USD", "JPY", "CHF", "CAD", "AUD", "GBP", "NZD" };
+
+            // check if current symbol is within list of major forex base symbols
+            if (baseSymbols.Contains(baseSymbol) == false) return;
+
+            // If we have not calculated the pip value for this base symbol then.
+            if (PipValues.ContainsKey(baseSymbol) == false)
+            {
+                double conversionFactor;
+                switch (baseSymbol)
+                {
+                    default:
+                        {
+                            // return 0
+                            conversionFactor = 0.0;
+                            break;
+                        }
+
+                    case "USD":
+                        {
+                            conversionFactor = 1.0;
+                            break;
+                        }
+
+                    case "JPY":
+                        {
+                            conversionFactor = 1.0 / GetSymbolPriceFromStorage("USD.JPY", category);
+                            break;
+                        }
+
+                    case "CHF":
+                        {
+                            conversionFactor = 1.0 / GetSymbolPriceFromStorage("USD.CHF", category);
+                            break;
+                        }
+
+                    case "CAD":
+                        {
+                            conversionFactor = 1.0 / GetSymbolPriceFromStorage("USD.CAD", category);
+                            break;
+                        }
+
+                    case "GBP":
+                        {
+                            conversionFactor = GetSymbolPriceFromStorage("GBP.USD", category);
+                            break;
+                        }
+
+
+                    case "AUD":
+                        {
+                            conversionFactor = GetSymbolPriceFromStorage("AUD.USD", category);
+                            break;
+                        }
+
+                    case "NZD":
+                        {
+                            conversionFactor = GetSymbolPriceFromStorage("NZD.USD", category);
+                            break;
+                        }
+                }
+
+                // calculate the pip value for the current chart base symbol
+                double pipValue = GetTickValue(10) * conversionFactor * 100000;
+
+                // cache the results into Dictionary.
+                PipValues.Add(baseSymbol, pipValue);
+            }
+        }
+
+        double GetTickValue(int ticks)
+        {
+            // 10 ticks make one pip.
+            double tickValue = Bars.Info.MinMove / Bars.Info.PriceScale;
+            return tickValue * ticks;
+        }
+
+        private double GetSymbolPriceFromStorage(string symbolName, ESymbolCategory category)
+        {
+            ReaderWriterLockSlim rwLock = new ReaderWriterLockSlim();
+
+            double symbolData = 0;
+
+            var benchmarkInfo = SymbolStorage
+                .GetDataFeeds()
+                .SelectMany
+                (
+                    data => SymbolStorage.GetSymbols(data, category)
+                                         .Select(data2 => new { dataFeed = data, symInfo = data2 })
+                )
+                .Where(data => data.symInfo.SymbolName == symbolName)
+                .First();
+
+            InstrumentDataRequest request = Bars.Request;
+            request.Range.From = Bars.Time[2];
+            request.Range.To = Bars.Time[0];
+            request.Category = (ESymbolCategory)benchmarkInfo.symInfo.SymbolCategory;
+            request.Symbol = benchmarkInfo.symInfo.SymbolName;
+            request.DataFeed = benchmarkInfo.dataFeed;
+            request.Exchange = benchmarkInfo.symInfo.SymbolExchange;
+            request.RTSymbol = request.Symbol;
+            request.RTDataFeed = request.DataFeed;
+            request.RTExchange = request.Exchange;
+
+            // without autoEvent, the method will return before results are returned
+            AutoResetEvent autoEvent = new AutoResetEvent(false);
+
+            // this is foreground or worker thread.
+            IDataLoaderResult results = DataLoader.BeginLoadData(request, result =>
+            {
+                // check to see if load data is completed
+                if (result.IsCompleted)
+                {
+                    try
+                    {
+                        // lock to prevent other application from accessing concurrently
+                        rwLock.EnterWriteLock();
+                        foreach (var quote in result.Data)
+                            symbolData = quote.Close;
+                    }
+                    finally
+                    {
+                        // remember to unlock
+                        rwLock.ExitWriteLock();
+                    }
+                }
+
+                DataLoader.EndLoadData(result);
+
+                // return control to main thread
+                autoEvent.Set();
+            }
+            , null);
+
+            // wait for signal from worker thread to continue
+            autoEvent.WaitOne();
+            return symbolData;
+        }
+        #endregion
+
+        #region Debug
+        private bool DebugMode = true;
+        private void Print(string message)
+        {
+            // print messages if debug mode == true.
+            if (DebugMode == false) return;
+
+            // Print who is calling Print()
+            StackTrace stackTrace = new StackTrace();
+
+            Output.WriteLine("Project:  {0}   |   Caller:  {1}   |   Bar Time:  {2}   |   Message:  {3}",
+                Name,
+                stackTrace.GetFrame(1).GetMethod().Name,
+                Bars.TimeValue.ToString("dd-MM-yy HH:mm:ss tt"),
+                message);
+        }
+        #endregion
+    }
 }
 
 namespace PowerLanguage.Indicator
@@ -1926,9 +2246,11 @@ namespace PowerLanguage.Indicator
         IPlotObjectStr OutputStatus;
         List<IPlotObject> Plot;
         IPlotObject PlotSingle;
+        AutoPositionSizing AutoPos;
 
         protected override void Create()
         {
+            AutoPos = new AutoPositionSizing(this);
 
             // plot objects
             OutputStatus = AddPlot(new StringPlotAttributes(
@@ -1955,11 +2277,17 @@ namespace PowerLanguage.Indicator
 
         protected override void StartCalc()
         {
+            AutoPos.AccountSize = 100000;
+            AutoPos.Risk = 2;
         }
 
         protected override void CalcBar()
         {
-           
+            if (Bars.LastBarOnChart)
+            {
+                AutoPos.Call();
+                Print("Contracts: " + AutoPos.Contracts(3700,3690));
+            }
         }
 
         #region Print Functions
