@@ -11,8 +11,10 @@ namespace PowerLanguage.Strategy
         //================================= Project Documentation =================================
         // Project Name : Strategy Framework
         // Platform     : Multicharts
+        // Version      : 
         // Class Type   : Strategy
-        // Date         : 29 Nov 2020
+        // Chart Type   : 
+        // Date         : 22 Jan 2020
         // Developer    : Sher Ning
         //=========================================================================================
         // Copyright    : 2020, Sher Ning Technologies           
@@ -21,25 +23,30 @@ namespace PowerLanguage.Strategy
         // Contact      : sherning@hotmail.com
         //=========================================================================================
         // References   :       
-        // Obectives    : Framework for developing and testing strategies
-        // Remarks      : Use this framework to develop and test strategies
+        // Obectives    : 
+        // Remarks      : 
         //=========================================================================================
 
-        /*/
-         *======================================== Version ========================================
-         *  28/11/2020 - Hard code inputs during development and testing.
-         * 
-         *======================================== Version ========================================
-        /*/
-
-
-        public _SherNing_Strategies(object obj): base(obj)
+        public _SherNing_Strategies(object obj) : base(obj)
         {
 
         }
 
+        IOrderPriced[] Entry;
         protected override void Create()
         {
+            Entry = new IOrderPriced[4];
+
+            string[] entryNames = new string[]
+            {"LE_1", "LE_2", "LE_3"};
+
+
+            for (int i = 1; i < 4; i++)
+                Entry[i] = OrderCreator.Stop(new SOrderParameters(
+                    Contracts.UserSpecified, 
+                    entryNames[i - 1], 
+                    EOrderAction.Buy));
+
             Output.Clear();
         }
         protected override void StartCalc()

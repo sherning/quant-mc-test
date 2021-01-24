@@ -327,6 +327,7 @@
     <Compile Include="_SherNing_PAL_MTF.Indicator.CS" />
     <Compile Include="_SherNing_TrendTemplateCriteria.Indicator.CS" />
     <Compile Include="_SherNing_VolNormalized.Indicator.CS" />
+    <Compile Include="_SherNing_StrategyFramework.Strategy.CS" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

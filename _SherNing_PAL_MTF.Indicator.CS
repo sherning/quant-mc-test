@@ -29,30 +29,36 @@ namespace PowerLanguage.Indicator
         [Input] public string Settings { get; set; }
         [Input] public int Length { get; set; }
         [Input] public int Smooth { get; set; }
+        [Input] public int StrengthLength { get; set; }
         [Input] public string DisplaySettings { get; set; }
         [Input] public bool ShowTF_1 { get; set; }
         [Input] public bool ShowTF_2 { get; set; }
         [Input] public bool ShowTF_3 { get; set; }
+        [Input] public bool ShowStrength { get; set; }
 
         public _SherNing_PAL_MTF(object _ctx) : base(_ctx)
         {
             Settings = "Indicator Settings";
             Length = 6;
             Smooth = 10;
+            StrengthLength = 20;
 
             DisplaySettings = "Display On/Off";
             ShowTF_1 = true;
             ShowTF_2 = true;
             ShowTF_3 = true;
+            ShowStrength = true;
         }
 
         PriceActionLineMTF PalFunc;
+        VolumeNormalised VolNorm;
         IPlotObject[] Plot;
         VariableSeries<double>[] PAL;
         Color[] PlotColor;
         protected override void Create()
         {
             PalFunc = new PriceActionLineMTF(this);
+            VolNorm = new VolumeNormalised(this);
             Plot = new IPlotObject[5];
             PAL = new VariableSeries<double>[5];
             PlotColor = new Color[5];
@@ -79,6 +85,9 @@ namespace PowerLanguage.Indicator
         {
             PalFunc.Length = Length;
             PalFunc.Smooth = Smooth;
+
+            VolNorm.Length = StrengthLength;
+            VolNorm.CalcMode = 2;
         }
         protected override void CalcBar()
         {
@@ -91,6 +100,8 @@ namespace PowerLanguage.Indicator
 
             PalFunc.Call();
 
+            double vol = VolNorm.Value * 100;
+
             if (PalFunc.TrendDir_1 == 1)
                 PlotColor[1] = Color.Green;
             else
@@ -102,12 +113,29 @@ namespace PowerLanguage.Indicator
                 PlotColor[2] = Color.Red;
 
             if (PalFunc.TrendDir_3 == 1)
-                PlotColor[3] = Color.Green;
+                PlotColor[3] = Color.DeepSkyBlue;
             else
-                PlotColor[3] = Color.Red;
+                PlotColor[3] = Color.HotPink;
+
+            int strength = 0;
+            if (vol < 50)
+                strength = 1;
+            else if (vol >= 50 && vol < 75)
+                strength = 3;
+            else if (vol >= 75 && vol < 100)
+                strength = 5;
+            else if (vol >= 100 && vol < 125)
+                strength = 7;
+            else if (vol >= 125)
+                strength = 9;
 
             if (ShowTF_1)
-                Plot[1].Set(0, PAL[1][0], PlotColor[1]);
+            {
+                if (Bars.Info.Category == ESymbolCategory.Stock || Bars.Info.Category == ESymbolCategory.Future)
+                    Plot[1].Set(0, PAL[1][0], PlotColor[1], strength);
+                else
+                    Plot[1].Set(0, PAL[1][0], PlotColor[1]);
+            }
 
             if (ShowTF_2)
                 Plot[2].Set(0, PAL[2][0], PlotColor[2]);

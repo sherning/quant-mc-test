@@ -1766,6 +1766,7 @@ namespace PowerLanguage.Function
         }
 
         int BarsRequired;
+        ESymbolCategory Category;
         protected override void StartCalc()
         {
             if (Length < 1) Length = 1;
@@ -1779,11 +1780,14 @@ namespace PowerLanguage.Function
 
             // there is no reference for bars back, therefore, maxbarsback = 0
             BarsRequired = Length * 6;
+
+            Category = Bars.Info.Category;
         }
         protected override double CalcBar()
         {
             // calculate end of bar
             if (Bars.Status != EBarState.Close) return 0;
+            if (Category == ESymbolCategory.Cash || Category == ESymbolCategory.Forex) return 0;
 
             DateTime today = Bars.Time[0];
             double vol = Bars.Volume[0];
@@ -1941,9 +1945,13 @@ namespace PowerLanguage.Function
         string BaseSymbol;
         int MinimumContracts, MaximumContracts, StepSize;
         double DollarRisk;
+        bool IsES;
 
         protected override void StartCalc()
         {
+            // initialize variables
+            IsES = false;
+
             // Bars first accessible only in StartCalc()
             Category = Bars.Info.Category;
 
@@ -1955,16 +1963,26 @@ namespace PowerLanguage.Function
             }
             else if (Category == ESymbolCategory.Stock)
             {
-                MinimumContracts = 10;
+                MinimumContracts = 100;
                 MaximumContracts = 10000;
             }
             else if (Category == ESymbolCategory.Future)
             {
-                // incomplete
                 MinimumContracts = 1;
-                MaximumContracts = 1000;
+                MaximumContracts = 100;
 
-                Print("Info: " + GetTickValue(1));
+                // check for E-mini futures
+                char[] temp = Bars.Info.RTSymbolName.ToCharArray();
+                if (temp[0] != '@' && temp[0] == 'E' && temp[1] == 'S')
+                {
+                    // "ES"
+                    IsES = true;
+                }
+                else if (temp[0] == '@' && temp[1] == 'E' && temp[2] == 'S')
+                {
+                    // "@ES"
+                    IsES = true;
+                }
             }
 
             StepSize = MinimumContracts;
@@ -2010,7 +2028,7 @@ namespace PowerLanguage.Function
 
                 // obtain raw trade size
                 rawTradeSize = (DollarRisk / valueRisk) * 100000;
-               
+
             }
             else if (Category == ESymbolCategory.Stock)
             {
@@ -2018,11 +2036,21 @@ namespace PowerLanguage.Function
             }
             else if (Category == ESymbolCategory.Future)
             {
-                // incomplete
                 double oneTick = GetTickValue(1);
-                double valueRisk = priceRisk / oneTick * 12.5;
+                double valueRisk = priceRisk / oneTick;
 
-                rawTradeSize = DollarRisk / valueRisk;
+                if (IsES)
+                {
+                    // tick value, one point = $50 USD, one tick = $12.50
+                    valueRisk *= 12.5;
+                    rawTradeSize = DollarRisk / valueRisk;
+                }
+                else
+                {
+                    // tick value, one point = $1000 USD, one tick = $10
+                    valueRisk *= 10;
+                    rawTradeSize = DollarRisk / valueRisk;
+                }
             }
 
             // convert to min step
@@ -2217,6 +2245,8 @@ namespace PowerLanguage.Function
         }
         #endregion
     }
+
+
 }
 
 namespace PowerLanguage.Indicator
@@ -2286,7 +2316,6 @@ namespace PowerLanguage.Indicator
             if (Bars.LastBarOnChart)
             {
                 AutoPos.Call();
-                Print("Contracts: " + AutoPos.Contracts(3700,3690));
             }
         }
 
@@ -2356,6 +2385,12 @@ namespace PowerLanguage.Function
         {
 
         }
+
+        protected override void Create()
+        {
+            // changing chart symbols does not call Create() 
+        }
+
         int Count;
         protected override void StartCalc()
         {
