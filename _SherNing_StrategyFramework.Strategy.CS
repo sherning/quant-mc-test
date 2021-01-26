@@ -69,26 +69,20 @@ namespace PowerLanguage.Strategy
         // Contact      : sherning@hotmail.com
         //=========================================================================================
         // References   :       
-        // Obectives    : 
+        // Obectives    : Framework for strategy function testing
         // Returns      : 
         // Remarks      : 
         //=========================================================================================
 
         public _SherNing_StrategyFramework(object _ctx) : base(_ctx) { }
-        private IOrderMarket buy_order;
         protected override void Create()
         {
-            // create variable objects, function objects, order objects etc.
-            buy_order = OrderCreator.MarketNextBar(new SOrderParameters(Contracts.Default, EOrderAction.Buy));
         }
         protected override void StartCalc()
         {
-            // assign inputs 
         }
         protected override void CalcBar()
         {
-            // strategy logic 
-            buy_order.Send();
         }
     }
 }

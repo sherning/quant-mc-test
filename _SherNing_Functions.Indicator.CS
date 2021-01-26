@@ -1250,8 +1250,15 @@ namespace PowerLanguage.Function
         // Remarks      : 
         //=========================================================================================
 
+        /// <summary>
+        /// Provide resolution (Minute or day chart)
+        /// </summary>
         public EResolution Resolution { get; set; }
+        /// <summary>
+        /// Provide resolution size
+        /// </summary>
         public int ResolutionSize { get; set; }
+
         public ClosingTick(CStudyControl m) : base(m) { }
 
         // reference variables
