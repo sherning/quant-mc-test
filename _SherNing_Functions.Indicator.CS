@@ -2253,7 +2253,104 @@ namespace PowerLanguage.Function
         #endregion
     }
 
+    public sealed class ToolBarFramework : FunctionSimple<string>
+    {
+        //================================= Project Documentation =================================
+        // Project Name : Tool Bar Framework
+        // Platform     : Multicharts
+        // Class Type   : Function Simple
+        // Version      : v.1.0.0
+        // Date         : 29 Jan 2021
+        // Developer    : Sher Ning
+        //=========================================================================================
+        // Copyright    : 2020, Sher Ning Technologies           
+        // License      : Internal use
+        // Client       : Sher Ning
+        // Contact      : sherning@hotmail.com
+        //=========================================================================================
+        // References   :       
+        // Obectives    : 
+        // Returns      : 
+        // Remarks      : To be applied on any chart
+        //=========================================================================================
 
+        public ToolBarFramework(CStudyControl m) : base(m) { }
+
+        ToolStripButton Btn_1;
+        bool Changed;
+        /// <summary>
+        /// Customise toolstrip with CreateToolStrip()
+        /// </summary>
+        /// <param name="tb"></param>
+        private void CreateToolStrip(ToolStrip tb)
+        {
+            // tool strip settings
+            tb.AutoSize = false;
+            tb.Height = 80;
+            tb.TabIndex = 0;
+
+            // tool strip items
+            Btn_1 = new ToolStripButton();
+            Btn_1.Text = "Button 1";
+            Btn_1.BackColor = Color.Black;
+            Btn_1.ForeColor = Color.White;
+            Changed = true;
+            Btn_1.Click += delegate
+            {
+                if (Changed)
+                {
+                    Btn_1.BackColor = Color.White;
+                    Btn_1.ForeColor = Color.Black;
+                    Changed = false;
+                }
+                else
+                {
+                    Btn_1.BackColor = Color.Black;
+                    Btn_1.ForeColor = Color.White;
+                    Changed = true;
+                }
+            };
+
+            AddNewItemToToolStrip(tb, Btn_1);
+        }
+
+        #region Key Components - Do not modify
+        bool IsToolStripCreated;
+        protected override void StartCalc()
+        {
+            if (!IsToolStripCreated)
+            {
+                ChartToolBar.AccessToolBar(CreateToolStrip);
+                IsToolStripCreated = true;
+            }
+        }
+
+        protected override string CalcBar()
+        {
+            return "Tool Bar Feature";
+        }
+
+        protected override void Destroy()
+        {
+            if (IsToolStripCreated)
+                ChartToolBar.AccessToolBar(tb =>
+                {
+                    List<ToolStripItem> items = new List<ToolStripItem>();
+                    foreach (ToolStripItem item in tb.Items)
+                        if (ReferenceEquals(this, item.Tag)) items.Add(item);
+
+                    // Clear all tool bar items
+                    foreach (var item in items) tb.Items.Remove(item);
+                });
+        }
+
+        private void AddNewItemToToolStrip(ToolStrip tb, ToolStripItem item)
+        {
+            item.Tag = this;
+            tb.Items.Add(item);
+        }
+        #endregion
+    }
 }
 
 namespace PowerLanguage.Indicator
@@ -2283,11 +2380,9 @@ namespace PowerLanguage.Indicator
         IPlotObjectStr OutputStatus;
         List<IPlotObject> Plot;
         IPlotObject PlotSingle;
-        AutoPositionSizing AutoPos;
 
         protected override void Create()
         {
-            AutoPos = new AutoPositionSizing(this);
 
             // plot objects
             OutputStatus = AddPlot(new StringPlotAttributes(
@@ -2302,28 +2397,18 @@ namespace PowerLanguage.Indicator
                 "Plot 9", "Plot 10"
             };
 
-
-            //for (int i = 0; i <= 10; i++)
-            //    Plot.Add(AddPlot(new PlotAttributes(
-            //        plotNames[i], EPlotShapes.Line, Color.White, Color.Black, 3, EPlotStyle.Solid, true)));
-
-
             PlotSingle = AddPlot(new PlotAttributes("Single", EPlotShapes.Histogram, Color.RoyalBlue));
             Output.Clear();
         }
 
         protected override void StartCalc()
         {
-            AutoPos.AccountSize = 100000;
-            AutoPos.Risk = 2;
+
         }
 
         protected override void CalcBar()
         {
-            if (Bars.LastBarOnChart)
-            {
-                AutoPos.Call();
-            }
+
         }
 
         #region Print Functions
