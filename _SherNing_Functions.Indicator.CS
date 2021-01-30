@@ -2351,6 +2351,7 @@ namespace PowerLanguage.Function
         }
         #endregion
     }
+
 }
 
 namespace PowerLanguage.Indicator

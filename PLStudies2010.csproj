@@ -329,6 +329,7 @@
     <Compile Include="_SherNing_VolNormalized.Indicator.CS" />
     <Compile Include="_SherNing_StrategyFramework.Strategy.CS" />
     <Compile Include="_SherNing_Scanner.Indicator.CS" />
+    <Compile Include="BarNumberForDateTime.Function.CS" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
