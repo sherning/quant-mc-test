@@ -50,10 +50,10 @@ namespace PowerLanguage.Function
         }
     }
 
-    public sealed class RiskRewardChartTool : FunctionSeries<string>
+    public sealed class TradeOrderTrendLines : FunctionSeries<string>
     {
         //================================= Project Documentation =================================
-        // Project Name : Risk Reward Chart Tool with Toolbar
+        // Project Name : Trade Order Trend Lines
         // Platform     : Multicharts
         // Class Type   : Function Series (CalcBar called periodically)
         // Version      : v.1.0.0
@@ -68,103 +68,112 @@ namespace PowerLanguage.Function
         // References   :       
         // Obectives    : 
         // Returns      : 
-        // Remarks      : Function to check risk reward
+        // Remarks      : Function to generate trend lines
         //=========================================================================================
 
+        // function properties
         /// <summary>
-        /// Trendline ID for entry line
+        /// Generate or use trendlines on chart. Max 10 lines
         /// </summary>
-        public int EntryID { get; set; }
+        public int NumOfTrendLines { get; set; }
+
         /// <summary>
-        /// Trendline ID for stoploss line
+        /// Get trendline properties
         /// </summary>
-        public int StopLossID { get; set; }
-        /// <summary>
-        /// Trendline ID for profit line
-        /// </summary>
-        public int ProfitID { get; set; }
-        public RiskRewardChartTool(CStudyControl m) : base(m) { }
+        public ITrendLineObject[] TrendLine { get; private set; }
+        public TradeOrderTrendLines(CStudyControl m) : base(m) { }
 
-        protected override void Create()
-        {
-        }
-
-        ITrendLineObject EntryTL, StopLossTL, ProfitTL;
-        bool EntryTLFound, StopLossTLFound, ProfitTLFound;
-
-        // default color
-        Color EntryTLColor = Color.DarkGray;
-        Color StopLossTLColor = Color.LightGoldenrodYellow;
-        Color ProfitTLColor = Color.DarkCyan;
+        bool[] TrendLineStatus;
+        bool IsGenerated;
         protected override void StartCalc()
         {
-            // get trend line from chart
-            EntryTLFound = StopLossTLFound = ProfitTLFound = false;
+            if (NumOfTrendLines > 10) NumOfTrendLines = 10;
 
-            foreach (ITrendLineObject line in
-                DrwTrendLine.GetTrendLineObjects(EDrawingSource.CurrentTechOrManual))
-            {
-                if (line.ID == EntryID)
-                {
-                    EntryTL = line;
-                }
-                else if (line.ID == StopLossID)
-                {
-                    StopLossTL = line;
-                }
-                else if (line.ID == ProfitID)
-                {
-                    ProfitTL = line;
-                }
-            }
+            TrendLineStatus = new bool[NumOfTrendLines + 1];
+            TrendLine = new ITrendLineObject[NumOfTrendLines + 1];
 
-            // check if trend line exist otherwise abort strategy
-            if (EntryTL != null)
-            {
-                EntryTLFound = true;
-                EntryTL.Color = EntryTLColor;
-            }
-            else
-            {
-                MessageBox.Show("Entry Line not found", Name, MessageBoxButtons.OK, MessageBoxIcon.Error);
-                ExecControl.Abort("Please check, and reload strategy");
-            }
-
-            if (StopLossTL != null)
-            {
-                StopLossTLFound = true;
-                StopLossTL.Color = StopLossTLColor;
-            }
-            else
-            {
-                MessageBox.Show("Stop Loss Line not found", Name, MessageBoxButtons.OK, MessageBoxIcon.Error);
-                ExecControl.Abort("Please check, and reload strategy");
-            }
-
-            if (ProfitTL != null)
-            {
-                ProfitTLFound = true;
-                ProfitTL.Color = ProfitTLColor;
-            }
-            else
-            {
-                MessageBox.Show("Profit Line not found", Name, MessageBoxButtons.OK, MessageBoxIcon.Error);
-                ExecControl.Abort("Please check, and reload strategy");
-            }
+            IsGenerated = false;
         }
+
         protected override string CalcBar()
         {
             if (!Bars.LastBarOnChart) return "Run on last bar of chart";
 
-            RearrangeTLDefault();
+            if (!IsGenerated)
+            {
+                GenerateOrGetTrendLines();
+                IsGenerated = true;
+            }
 
-
-
+            NullExceptionCheck();
             return "On Screen Risk Reward Chart Tool";
         }
 
-        #region Refactor
-        private void RearrangeTLDefault()
+        private void GenerateOrGetTrendLines()
+        {
+            // count number of trend lines on chart
+            int numOfManualTrendLines = GetNumOfManuallyDrawnTrendLines();
+
+            if (numOfManualTrendLines > 0)
+            {
+                int x = 1;
+                foreach (ITrendLineObject line in
+                    DrwTrendLine.GetTrendLineObjects(EDrawingSource.CurrentTechOrManual))
+                    TrendLine[x++] = line;
+            }
+
+            int generateTL = NumOfTrendLines - numOfManualTrendLines;
+
+            if (generateTL > 0)
+            {
+                for (int i = numOfManualTrendLines + 1; i <= numOfManualTrendLines + generateTL; i++)
+                {
+                    ChartPoint start = new ChartPoint(Bars.FullSymbolData.Time[4], Bars.FullSymbolData.High[4]);
+                    ChartPoint end = new ChartPoint(Bars.Time[0], Bars.Low[0]);
+                    TrendLine[i] = DrwTrendLine.Create(start, end);
+                }
+            }
+
+            CheckTrendLineStatus();
+            RearrangeTrendLines();
+        }
+
+        private int CheckTrendLineStatus()
+        {
+            int active = 0;
+            for (int i = 0; i <= NumOfTrendLines; i++)
+            {
+                if (TrendLine[i] != null)
+                {
+                    TrendLineStatus[i] = true;
+                    active++;
+                }
+                else
+                    TrendLineStatus[i] = false;
+            }
+
+            return active;
+        }
+
+        private int GetNumOfManuallyDrawnTrendLines()
+        {
+            int count = 0;
+            int id = 0;
+
+            foreach (ITrendLineObject line in
+               DrwTrendLine.GetTrendLineObjects(EDrawingSource.CurrentTechOrManual))
+            {
+                if (line.ID != id)
+                {
+                    id = line.ID;
+                    count++;
+                }
+            }
+
+            return count;
+        }
+
+        public void RearrangeTrendLines()
         {
             // rearrange trend line
             DateTime rightScreenTime = Environment.RightScreenTime;
@@ -188,22 +197,39 @@ namespace PowerLanguage.Function
             DateTime startTime = Bars.FullSymbolData.Time[(int)(numOfBarsOnScreen * 0.2) + rightBarIndex];
             DateTime endTime = Bars.FullSymbolData.Time[rightBarIndex];
 
-            // spacing between trend lines
-            double entryHeight = lowestScreenVal + (priceDiffAcrossScreen * 0.4);
-            double stopLossHeight = lowestScreenVal + (priceDiffAcrossScreen * 0.2);
-            double profitHeight = lowestScreenVal + (priceDiffAcrossScreen * 0.6);
+            // adjust height for different number of trend lines
+            double height;
+            if (NumOfTrendLines <= 3)
+                height = 0.2;
+            else if (NumOfTrendLines > 3 && NumOfTrendLines <= 7)
+                height = 0.1;
+            else
+                height = 0.05;
 
-            // update the three trend lines.
-            EntryTL.Begin = new ChartPoint(startTime, entryHeight);
-            EntryTL.End = new ChartPoint(endTime, entryHeight);
-
-            StopLossTL.Begin = new ChartPoint(startTime, stopLossHeight);
-            StopLossTL.End = new ChartPoint(endTime, stopLossHeight);
-
-            ProfitTL.Begin = new ChartPoint(startTime, profitHeight);
-            ProfitTL.End = new ChartPoint(endTime, profitHeight);
+            for (int i = 1; i <= NumOfTrendLines; i++)
+            {
+                ChartPoint start = new ChartPoint(startTime, lowestScreenVal + (priceDiffAcrossScreen * height * i));
+                ChartPoint end = new ChartPoint(endTime, lowestScreenVal + (priceDiffAcrossScreen * height * i));
+                TrendLine[i].Begin = start;
+                TrendLine[i].End = end;
+            }
         }
-        #endregion
+
+        private void NullExceptionCheck()
+        {
+            int active = CheckTrendLineStatus();
+
+            int x = 1;
+            ITrendLineObject[] temp = new ITrendLineObject[active + 1];
+            for (int i = 1; i <= NumOfTrendLines; i++)
+            {
+                if (TrendLine[i] != null)
+                    temp[x++] = TrendLine[i];
+            }
+
+            TrendLine = temp;
+            CheckTrendLineStatus();
+        }
 
         #region Helper
 
@@ -295,18 +321,15 @@ namespace PowerLanguage.Strategy
 
         public _SherNing_StrategyFramework(object _ctx) : base(_ctx) { }
 
-        RiskRewardChartTool RRChartToolF;
+        TradeOrderTrendLines TrendLinesF;
         protected override void Create()
         {
-            RRChartToolF = new RiskRewardChartTool(this);
-
+            TrendLinesF = new TradeOrderTrendLines(this);
             Output.Clear();
         }
         protected override void StartCalc()
         {
-            RRChartToolF.EntryID = 1;
-            RRChartToolF.StopLossID = 2;
-            RRChartToolF.ProfitID = 3;
+            TrendLinesF.NumOfTrendLines = 7;
         }
         protected override void CalcBar()
         {
