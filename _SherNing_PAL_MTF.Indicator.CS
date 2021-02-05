@@ -117,17 +117,19 @@ namespace PowerLanguage.Indicator
             else
                 PlotColor[3] = Color.HotPink;
 
-            int strength = 0;
-            if (vol < 50)
-                strength = 1;
-            else if (vol >= 50 && vol < 75)
-                strength = 3;
-            else if (vol >= 75 && vol < 100)
-                strength = 5;
-            else if (vol >= 100 && vol < 125)
-                strength = 7;
-            else if (vol >= 125)
-                strength = 9;
+            int strength = 3;
+
+            if (ShowStrength)
+            {
+                if (vol < 50)
+                    strength = 3;
+                else if (vol >= 50 && vol < 100)
+                    strength = 4;
+                else if (vol >= 100 && vol < 150)
+                    strength = 5;
+                else if (vol >= 150)
+                    strength = 6;
+            }
 
             if (ShowTF_1)
             {
@@ -138,10 +140,10 @@ namespace PowerLanguage.Indicator
             }
 
             if (ShowTF_2)
-                Plot[2].Set(0, PAL[2][0], PlotColor[2]);
+                Plot[2].Set(0, PAL[2][0], PlotColor[2], 3);
 
             if (ShowTF_3)
-                Plot[3].Set(0, PAL[3][0], PlotColor[3]);
+                Plot[3].Set(0, PAL[3][0], PlotColor[3], 5);
         }
     }
 }

@@ -50,7 +50,7 @@ namespace PowerLanguage.Function
         }
     }
 
-    public sealed class TradeOrderTrendLines : FunctionSeries<string>
+    public sealed class TrendLineGenerator : FunctionSeries<string>
     {
         //================================= Project Documentation =================================
         // Project Name : Trade Order Trend Lines
@@ -81,78 +81,61 @@ namespace PowerLanguage.Function
         /// Get trendline properties
         /// </summary>
         public ITrendLineObject[] TrendLine { get; private set; }
-        public TradeOrderTrendLines(CStudyControl m) : base(m) { }
+        public TrendLineGenerator(CStudyControl m) : base(m) { }
 
-        bool[] TrendLineStatus;
-        bool IsGenerated;
+        bool IsGenerated, IsWeeklyChart;
+        DateTime FirstCalcBarTime;
         protected override void StartCalc()
         {
             if (NumOfTrendLines > 10) NumOfTrendLines = 10;
 
-            TrendLineStatus = new bool[NumOfTrendLines + 1];
             TrendLine = new ITrendLineObject[NumOfTrendLines + 1];
-
             IsGenerated = false;
+
+            if (Bars.Info.Resolution.Type == EResolution.Week)
+                IsWeeklyChart = true;
+            else
+                IsWeeklyChart = false;
         }
 
         protected override string CalcBar()
         {
+            if (Bars.CurrentBar == 1)
+                FirstCalcBarTime = Bars.Time[0];
+
             if (!Bars.LastBarOnChart) return "Run on last bar of chart";
 
             if (!IsGenerated)
             {
-                GenerateOrGetTrendLines();
+                // count number of trend lines on chart
+                int numOfManualTrendLines = GetNumOfManuallyDrawnTrendLines();
+
+                if (numOfManualTrendLines > 0)
+                {
+                    int x = 1;
+                    foreach (ITrendLineObject line in
+                        DrwTrendLine.GetTrendLineObjects(EDrawingSource.CurrentTechOrManual))
+                        TrendLine[x++] = line;
+                }
+
+                int generateTL = NumOfTrendLines - numOfManualTrendLines;
+
+                if (generateTL > 0)
+                {
+                    for (int i = numOfManualTrendLines + 1; i <= numOfManualTrendLines + generateTL; i++)
+                    {
+                        ChartPoint start = new ChartPoint(Bars.Time[1], Bars.High[1]);
+                        ChartPoint end = new ChartPoint(Bars.Time[0], Bars.Low[0]);
+                        TrendLine[i] = DrwTrendLine.Create(start, end);
+                    }
+                }
+
+                RearrangeTrendLines();
                 IsGenerated = true;
             }
 
-            NullExceptionCheck();
+            //NullExceptionCheck();
             return "On Screen Risk Reward Chart Tool";
-        }
-
-        private void GenerateOrGetTrendLines()
-        {
-            // count number of trend lines on chart
-            int numOfManualTrendLines = GetNumOfManuallyDrawnTrendLines();
-
-            if (numOfManualTrendLines > 0)
-            {
-                int x = 1;
-                foreach (ITrendLineObject line in
-                    DrwTrendLine.GetTrendLineObjects(EDrawingSource.CurrentTechOrManual))
-                    TrendLine[x++] = line;
-            }
-
-            int generateTL = NumOfTrendLines - numOfManualTrendLines;
-
-            if (generateTL > 0)
-            {
-                for (int i = numOfManualTrendLines + 1; i <= numOfManualTrendLines + generateTL; i++)
-                {
-                    ChartPoint start = new ChartPoint(Bars.FullSymbolData.Time[4], Bars.FullSymbolData.High[4]);
-                    ChartPoint end = new ChartPoint(Bars.Time[0], Bars.Low[0]);
-                    TrendLine[i] = DrwTrendLine.Create(start, end);
-                }
-            }
-
-            CheckTrendLineStatus();
-            RearrangeTrendLines();
-        }
-
-        private int CheckTrendLineStatus()
-        {
-            int active = 0;
-            for (int i = 0; i <= NumOfTrendLines; i++)
-            {
-                if (TrendLine[i] != null)
-                {
-                    TrendLineStatus[i] = true;
-                    active++;
-                }
-                else
-                    TrendLineStatus[i] = false;
-            }
-
-            return active;
         }
 
         private int GetNumOfManuallyDrawnTrendLines()
@@ -185,7 +168,11 @@ namespace PowerLanguage.Function
             if (rightScreenTime > Bars.Time[0])
                 rightScreenTime = Bars.Time[0];
 
-            // returns the index for given datetime
+            // left screen time starts from current bar == 1
+            if (leftScreenTime < FirstCalcBarTime)
+                leftScreenTime = FirstCalcBarTime;
+
+            //returns the index for given datetime
             int leftBarIndex = BinarySearch(leftScreenTime);
             int rightBarIndex = BinarySearch(rightScreenTime);
 
@@ -215,22 +202,6 @@ namespace PowerLanguage.Function
             }
         }
 
-        private void NullExceptionCheck()
-        {
-            int active = CheckTrendLineStatus();
-
-            int x = 1;
-            ITrendLineObject[] temp = new ITrendLineObject[active + 1];
-            for (int i = 1; i <= NumOfTrendLines; i++)
-            {
-                if (TrendLine[i] != null)
-                    temp[x++] = TrendLine[i];
-            }
-
-            TrendLine = temp;
-            CheckTrendLineStatus();
-        }
-
         #region Helper
 
         private int BinarySearch(DateTime key)
@@ -238,8 +209,10 @@ namespace PowerLanguage.Function
             int max = Bars.FullSymbolData.Count;
 
             // search key is greater than current bar date or less than data series
-            if (Bars.Time[0] < key || Bars.FullSymbolData.Time[max - 1] > key)
-                return -1;
+
+            if (IsWeeklyChart == false)
+                if (Bars.Time[0] < key || Bars.FullSymbolData.Time[max - 1] > key)
+                    return -1;
 
             return BinarySearch(0, max - 1, key);
         }
@@ -321,14 +294,15 @@ namespace PowerLanguage.Strategy
 
         public _SherNing_StrategyFramework(object _ctx) : base(_ctx) { }
 
-        TradeOrderTrendLines TrendLinesF;
+        TrendLineGenerator TrendLinesF;
         protected override void Create()
         {
-            TrendLinesF = new TradeOrderTrendLines(this);
+            TrendLinesF = new TrendLineGenerator(this);
             Output.Clear();
         }
         protected override void StartCalc()
         {
+
             TrendLinesF.NumOfTrendLines = 7;
         }
         protected override void CalcBar()
@@ -355,3 +329,47 @@ namespace PowerLanguage.Strategy
 
     }
 }
+
+namespace PowerLanguage.Function
+{
+    public sealed class StrategyTest : FunctionSeries<string>
+    {
+        public StrategyTest(CStudyControl m) : base(m)
+        {
+
+        }
+        protected override void Create()
+        {
+        }
+        protected override void StartCalc()
+        {
+        }
+        protected override string CalcBar()
+        {
+
+            return "Strategy Tester";
+        }
+
+        #region Print Functions
+        private bool DebugMode = true;
+        private void Print(string message)
+        {
+            // print messages if debug mode == true.
+            if (DebugMode == false) return;
+
+            // Print who is calling Print()
+            StackTrace stackTrace = new StackTrace();
+
+            Output.WriteLine("Project:  {0}   |   Caller:  {1}   |   Bar Time:  {2}   |   Message:  {3}",
+                Name,
+                stackTrace.GetFrame(1).GetMethod().Name,
+                Bars.TimeValue.ToString("dd-MM-yy HH:mm:ss tt"),
+                message);
+        }
+        #endregion
+
+    }
+
+}
+
+
