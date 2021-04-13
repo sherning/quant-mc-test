@@ -281,7 +281,7 @@ namespace PowerLanguage.Strategy
         // Date         : 24 Jan 2021
         // Developer    : Sher Ning
         //=========================================================================================
-        // Copyright    : 2020, Sher Ning Technologies           
+        // Copyright    : 2021, Sher Ning Technologies           
         // License      : Internal use
         // Client       : Sher Ning
         // Contact      : sherning@hotmail.com
@@ -294,16 +294,12 @@ namespace PowerLanguage.Strategy
 
         public _SherNing_StrategyFramework(object _ctx) : base(_ctx) { }
 
-        TrendLineGenerator TrendLinesF;
         protected override void Create()
         {
-            TrendLinesF = new TrendLineGenerator(this);
             Output.Clear();
         }
         protected override void StartCalc()
         {
-
-            TrendLinesF.NumOfTrendLines = 7;
         }
         protected override void CalcBar()
         {

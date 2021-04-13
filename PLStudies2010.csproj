@@ -330,6 +330,7 @@
     <Compile Include="_SherNing_StrategyFramework.Strategy.CS" />
     <Compile Include="_SherNing_Scanner.Indicator.CS" />
     <Compile Include="BarNumberForDateTime.Function.CS" />
+    <Compile Include="_STpatterns_Fractals.Indicator.CS" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

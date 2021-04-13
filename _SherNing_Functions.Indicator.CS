@@ -2352,6 +2352,243 @@ namespace PowerLanguage.Function
         #endregion
     }
 
+    public sealed class VolumeMTF : FunctionSimple<string>
+    {
+        //================================= Project Documentation =================================
+        // Project Name : Price Action Line Multitime Frame
+        // Platform     : Multicharts
+        // Class Type   : Function
+        // Date         : 28 Nov 2020
+        // Developer    : Sher Ning
+        //=========================================================================================
+        // Copyright    : 2020, Sher Ning Technologies           
+        // License      : Internal use
+        // Client       : Sher Ning
+        // Contact      : sherning@hotmail.com
+        //=========================================================================================
+        // References   :       
+        // Obectives    : Daily, Weekly, Monthly
+        // Remarks      : 
+        //=========================================================================================
+
+        public int Length { get; set; }
+        public int Smooth { get; set; }
+
+        // function output
+        public VariableSeries<double> PAL_1 { get { return PAL[1]; } }
+        public int TrendDir_1 { get { return TrendDirection[1][0]; } }
+        public VariableSeries<double> PAL_2 { get { return PAL[2]; } }
+        public int TrendDir_2 { get { return TrendDirection[2][0]; } }
+        public VariableSeries<double> PAL_3 { get { return PAL[3]; } }
+        public int TrendDir_3 { get { return TrendDirection[3][0]; } }
+
+
+        public VolumeMTF (CStudyControl m) : base(m) { }
+
+        // 4 timeframes, day, week, month, year, avoid [0] for ambiguity
+        const int TFs = 5;
+
+        // function series, works as variable series, which has built in list
+        ClosingTick[] ClosingTicks;
+        HullMovingAverage[] HMA;
+        VariableSeries<double>[] PAL;
+        VariableSeries<bool>[] CloseTick;
+        VariableSeries<int>[] TrendDirection;
+        protected override void Create()
+        {
+            ClosingTicks = new ClosingTick[TFs];
+            CloseTick = new VariableSeries<bool>[TFs];
+            HMA = new HullMovingAverage[TFs];
+            PAL = new VariableSeries<double>[TFs];
+            TrendDirection = new VariableSeries<int>[TFs];
+
+            for (int timeframe = 0; timeframe < TFs; timeframe++)
+            {
+                ClosingTicks[timeframe] = new ClosingTick(this);
+                HMA[timeframe] = new HullMovingAverage(this);
+                PAL[timeframe] = new VariableSeries<double>(this);
+                CloseTick[timeframe] = new VariableSeries<bool>(this);
+                TrendDirection[timeframe] = new VariableSeries<int>(this);
+            }
+        }
+
+        double Alpha, Gain;
+        double[] BarCount, Vols;
+        bool CurrTick, PrevTick;
+        protected override void StartCalc()
+        {
+            if (Length < 1) Length = 6;
+            if (Smooth < 1) Smooth = 10;
+
+            Alpha = 2.0 / (Length + 1.0);
+            Gain = Smooth / 100.0;
+
+            BarCount = new double[TFs];
+            Vols = new double[TFs];
+
+            CurrTick = PrevTick = false;
+
+            // properties
+            for (int i = 0; i < TFs; i++)
+                HMA[i].Length = Length;
+
+            GetTimeFramesForCalc();
+        }
+
+        private void GetTimeFramesForCalc()
+        {
+            EResolution resolution = Bars.Info.Resolution.Type;
+            int resSize = (int)Bars.Info.Resolution.Size;
+
+            // base chart in minutes
+            if (resolution == EResolution.Minute)
+            {
+                for (int i = 0; i < TFs; i++)
+                    ClosingTicks[i].Resolution = EResolution.Minute;
+
+                ClosingTicks[TFs - 1].Resolution = EResolution.Day;
+
+                switch (resSize)
+                {
+                    default:
+                    case 0:
+                        break;
+
+                    case 5:
+                        ClosingTicks[1].ResolutionSize = 5;
+                        ClosingTicks[2].ResolutionSize = 60;
+                        ClosingTicks[3].ResolutionSize = 240;
+                        break;
+
+                    case 10:
+                        ClosingTicks[1].ResolutionSize = 10;
+                        ClosingTicks[2].ResolutionSize = 60;
+                        ClosingTicks[3].ResolutionSize = 240;
+                        break;
+
+                    case 15:
+                        ClosingTicks[1].ResolutionSize = 15;
+                        ClosingTicks[2].ResolutionSize = 60;
+                        ClosingTicks[3].ResolutionSize = 240;
+                        break;
+
+                    case 20:
+                        ClosingTicks[1].ResolutionSize = 20;
+                        ClosingTicks[2].ResolutionSize = 60;
+                        ClosingTicks[3].ResolutionSize = 240;
+                        break;
+
+                    case 30:
+                        ClosingTicks[1].ResolutionSize = 30;
+                        ClosingTicks[2].ResolutionSize = 60;
+                        ClosingTicks[3].ResolutionSize = 240;
+                        break;
+
+                    case 60:
+                        ClosingTicks[1].ResolutionSize = 60;
+                        ClosingTicks[2].ResolutionSize = 240;
+                        ClosingTicks[3].Resolution = EResolution.Day;
+                        ClosingTicks[4].Resolution = EResolution.Week;
+                        break;
+
+                    case 240:
+                        ClosingTicks[1].ResolutionSize = 240;
+                        ClosingTicks[2].Resolution = EResolution.Day;
+                        ClosingTicks[3].Resolution = EResolution.Week;
+                        ClosingTicks[4].Resolution = EResolution.Month;
+                        break;
+                }
+            }
+
+            // base chart in day
+            else if (resolution == EResolution.Day)
+            {
+                // day, week, month, year
+                for (int i = 0; i < TFs; i++)
+                    ClosingTicks[i].Resolution = (EResolution)(3 + i);
+            }
+        }
+
+        protected override string CalcBar()
+        {
+            if (Bars.Status != EBarState.Close) return "Calculate on bar close only";
+
+            for (int timeframe = 1; timeframe < TFs; timeframe++)
+            {
+                // optimization, cache variableseries
+                CurrTick = CloseTick[timeframe].Value = ClosingTicks[timeframe][0];
+                PrevTick = CloseTick[timeframe][1];
+
+                // for each timeframe do the following
+                if (BarCount[timeframe] > 0)
+                {
+                    if (PrevTick)
+                        Vols[timeframe] = Bars.Volume[0];
+                    else
+                        Vols[timeframe] = Math.Max(Bars.VolumeValue, Vols[timeframe]);
+
+                }
+
+                if (CurrTick)
+                {
+                    HMA[timeframe].AddData(Vols[timeframe]);
+
+                    double hma = HMA[timeframe].Value;
+
+                    if (Vols[timeframe] - PAL[timeframe][1] > 0)
+                    {
+                        // Gain < 0
+                        PAL[timeframe].Value
+                            = Alpha * (hma + (-Gain) * (hma - PAL[timeframe][1]))
+                            + (1.0 - Alpha) * PAL[timeframe][1];
+                    }
+                    else if (Vols[timeframe] - PAL[timeframe][1] < 0)
+                    {
+                        // Gain > 0
+                        PAL[timeframe].Value
+                           = Alpha * (hma + Gain * (hma - PAL[timeframe][1]))
+                           + (1.0 - Alpha) * PAL[timeframe][1];
+                    }
+                    else
+                    {
+                        // Gain = 0
+                        PAL[timeframe].Value
+                           = Alpha * (hma + 0.0 * (hma - PAL[timeframe][1]))
+                           + (1.0 - Alpha) * PAL[timeframe][1];
+                    }
+
+                    // set trend direction
+                    if (PAL[timeframe][0] >= PAL[timeframe][1])
+                        TrendDirection[timeframe].Value = 1;
+                    else
+                        TrendDirection[timeframe].Value = -1;
+                }
+
+                if (CurrTick)
+                    BarCount[timeframe]++;
+            }
+
+            return "No output";
+        }
+
+        #region Print
+        private bool DebugMode = true;
+        private void Print(string message)
+        {
+            // print messages if debug mode == true.
+            if (DebugMode == false) return;
+
+            // Print who is calling Print()
+            StackTrace stackTrace = new StackTrace();
+
+            Output.WriteLine("Project:  {0}   |   Caller:  {1}   |   Bar Time:  {2}   |   Message:  {3}",
+                Name,
+                stackTrace.GetFrame(1).GetMethod().Name,
+                Bars.TimeValue.ToString("dd-MM-yy HH:mm:ss tt"),
+                message);
+        }
+        #endregion
+    }
 }
 
 namespace PowerLanguage.Indicator
@@ -2381,9 +2618,15 @@ namespace PowerLanguage.Indicator
         IPlotObjectStr OutputStatus;
         List<IPlotObject> Plot;
         IPlotObject PlotSingle;
-
+        VolumeMTF Volf;
+        VariableSeries<double>[] Vols;
         protected override void Create()
         {
+            Volf = new VolumeMTF(this);
+
+            Vols = new VariableSeries<double>[3];
+            for (int i = 0; i < 3; i++)
+                Vols[i] = new VariableSeries<double>(this);
 
             // plot objects
             OutputStatus = AddPlot(new StringPlotAttributes(
@@ -2393,23 +2636,39 @@ namespace PowerLanguage.Indicator
 
             string[] plotNames = new string[]
             {
-                "Plot 0", "Plot 1", "Plot 2", "Plot 3", "Plot 4",
-                "Plot 5", "Plot 6", "Plot 7", "Plot 8",
-                "Plot 9", "Plot 10"
+                "Plot 0", "Plot 1", "Plot 2", "Plot 3", "Plot 4"
             };
 
             PlotSingle = AddPlot(new PlotAttributes("Single", EPlotShapes.Histogram, Color.RoyalBlue));
+
+            Plot = new List<IPlotObject>();
+            for (int i = 0; i < 5; i++)
+            {
+                Plot.Add(AddPlot(new PlotAttributes(
+                    plotNames[i], EPlotShapes.Line, Color.White, Color.Black, 3, EPlotStyle.Solid, true)));
+            }
             Output.Clear();
         }
 
         protected override void StartCalc()
         {
-
         }
 
         protected override void CalcBar()
         {
+            if(Bars.CurrentBar == 2)
+            {
+                Vols[0] = Volf.PAL_1;
+                Vols[1] = Volf.PAL_2;
+                Vols[2] = Volf.PAL_3;
+            }
 
+            Volf.Call();
+
+            PlotSingle.Set(Bars.VolumeValue);
+            Plot[1].Set(Vols[0][0]);
+            Plot[2].Set(Vols[1][0]);
+            Plot[3].Set(Vols[2][0]);
         }
 
         #region Print Functions
