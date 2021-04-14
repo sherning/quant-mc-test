@@ -1477,7 +1477,7 @@ namespace PowerLanguage.Function
         }
         #endregion
 
-        #region Helper
+        #region Session End
         private bool IsSessionEnd()
         {
             int current = ConvertTimeToInt(Bars.TimeValue);
@@ -2383,7 +2383,7 @@ namespace PowerLanguage.Function
         public int TrendDir_3 { get { return TrendDirection[3][0]; } }
 
 
-        public VolumeMTF (CStudyControl m) : base(m) { }
+        public VolumeMTF(CStudyControl m) : base(m) { }
 
         // 4 timeframes, day, week, month, year, avoid [0] for ambiguity
         const int TFs = 5;
@@ -2620,6 +2620,7 @@ namespace PowerLanguage.Indicator
         IPlotObject PlotSingle;
         VolumeMTF Volf;
         VariableSeries<double>[] Vols;
+
         protected override void Create()
         {
             Volf = new VolumeMTF(this);
@@ -2656,13 +2657,13 @@ namespace PowerLanguage.Indicator
 
         protected override void CalcBar()
         {
-            if(Bars.CurrentBar == 2)
+            if (Bars.CurrentBar == 2)
             {
                 Vols[0] = Volf.PAL_1;
                 Vols[1] = Volf.PAL_2;
                 Vols[2] = Volf.PAL_3;
             }
-
+          
             Volf.Call();
 
             PlotSingle.Set(Bars.VolumeValue);
@@ -2709,6 +2710,9 @@ namespace PowerLanguage.Function
         protected override int CalcBar()
         {
             // every single call() or .value, will invoke CalcBar once
+            // only use series, if you are lazy to create a VariableSeries within FunctionSeries
+            // Using TestSeries[1] will invoke CalcBar(), forcing it to calculate again.
+
             return Count++;
         }
 
