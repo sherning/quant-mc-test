@@ -332,6 +332,8 @@
     <Compile Include="BarNumberForDateTime.Function.CS" />
     <Compile Include="_STpatterns_Fractals.Indicator.CS" />
     <Compile Include="_STpatterns_ADR.Indicator.CS" />
+    <Compile Include="_STpatterns_Strategy_60.Strategy.CS" />
+    <Compile Include="_SherNing_StrategyPlots.Indicator.CS" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

@@ -43,8 +43,8 @@ namespace PowerLanguage.Strategy
 
             for (int i = 1; i < 4; i++)
                 Entry[i] = OrderCreator.Stop(new SOrderParameters(
-                    Contracts.UserSpecified, 
-                    entryNames[i - 1], 
+                    Contracts.UserSpecified,
+                    entryNames[i - 1],
                     EOrderAction.Buy));
 
             Output.Clear();
@@ -75,3 +75,4 @@ namespace PowerLanguage.Strategy
         #endregion
     }
 }
+

@@ -138,9 +138,7 @@ namespace PowerLanguage.Function
 
             if (IsSessionEnd())
             {
-                if (TimePeriod >= 2)
-                    Shift(TimePeriod);
-
+                Shift(TimePeriod);
                 DailyRange[0] = SessionHigh - SessionLow;
 
                 // set to default
@@ -164,10 +162,11 @@ namespace PowerLanguage.Function
 
         private void Shift(int period)
         {
-            // terminate
-            if (period < 2) return;
-            DailyRange[period - 1] = DailyRange[period - 2];
-            Shift(period - 1);
+            if (period >= 2)
+            {
+                DailyRange[period - 1] = DailyRange[period - 2];
+                Shift(period - 1);
+            }
         }
 
         private double Average()
