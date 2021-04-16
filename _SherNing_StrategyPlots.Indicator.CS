@@ -32,21 +32,25 @@ namespace PowerLanguage.Indicator
         [Input] public string Plot_1_Settings { get; set; }
         [Input] public int Plot_1_Num { get; set; }
         [Input] public int Plot_1_Width { get; set; }
+        [Input] public int Plot_1_Offset { get; set; }
         [Input] public Color Plot_1_Color { get; set; }
 
         [Input] public string Plot_2_Settings { get; set; }
         [Input] public int Plot_2_Num { get; set; }
         [Input] public int Plot_2_Width { get; set; }
+        [Input] public int Plot_2_Offset { get; set; }
         [Input] public Color Plot_2_Color { get; set; }
 
         [Input] public string Plot_3_Settings { get; set; }
         [Input] public int Plot_3_Num { get; set; }
         [Input] public int Plot_3_Width { get; set; }
+        [Input] public int Plot_3_Offset { get; set; }
         [Input] public Color Plot_3_Color { get; set; }
 
         [Input] public string Plot_4_Settings { get; set; }
         [Input] public int Plot_4_Num { get; set; }
         [Input] public int Plot_4_Width { get; set; }
+        [Input] public int Plot_4_Offset { get; set; }
         [Input] public Color Plot_4_Color { get; set; }
 
         public _SherNing_StrategyPlots(object _ctx) : base(_ctx)
@@ -61,6 +65,8 @@ namespace PowerLanguage.Indicator
             Plot_2_Num = 2;
             Plot_3_Num = 3;
             Plot_4_Num = 4;
+
+            Plot_1_Offset = Plot_2_Offset = Plot_3_Offset = Plot_4_Offset = 0;
 
             // set default colors and width
             Plot_1_Color = Plot_3_Color = Color.DeepPink; // 255,0,128
@@ -97,19 +103,19 @@ namespace PowerLanguage.Indicator
         {
             // plot 1
             if (StrategyInfo.GetPlotValue(Plot_1_Num) != 0)
-                PlotList[1].Set(StrategyInfo.GetPlotValue(Plot_1_Num), Plot_1_Color, Plot_1_Width);
+                PlotList[1].Set(Plot_1_Offset, StrategyInfo.GetPlotValue(Plot_1_Num), Plot_1_Color, Plot_1_Width);
 
             // plot 2
             if (StrategyInfo.GetPlotValue(Plot_2_Num) != 0)
-                PlotList[2].Set(StrategyInfo.GetPlotValue(Plot_2_Num), Plot_2_Color, Plot_2_Width);
+                PlotList[2].Set(Plot_2_Offset, StrategyInfo.GetPlotValue(Plot_2_Num), Plot_2_Color, Plot_2_Width);
 
             // plot 3
             if (StrategyInfo.GetPlotValue(Plot_3_Num) != 0)
-                PlotList[3].Set(StrategyInfo.GetPlotValue(Plot_3_Num), Plot_3_Color, Plot_3_Width);
+                PlotList[3].Set(Plot_3_Offset, StrategyInfo.GetPlotValue(Plot_3_Num), Plot_3_Color, Plot_3_Width);
 
             // plot 4
             if (StrategyInfo.GetPlotValue(Plot_4_Num) != 0)
-                PlotList[4].Set(StrategyInfo.GetPlotValue(Plot_4_Num), Plot_4_Color, Plot_4_Width);
+                PlotList[4].Set(Plot_4_Offset, StrategyInfo.GetPlotValue(Plot_4_Num), Plot_4_Color, Plot_4_Width);
         }
     }
 }

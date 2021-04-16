@@ -166,6 +166,9 @@ namespace PowerLanguage.Function
         //                Fractal use ball point, trend direction use arrows
         //=========================================================================================
 
+        /// <summary>
+        /// Number of bars to the left and to the right of pivot.
+        /// </summary>
         public int BarsAroundFractal { get; set; }
         public ST_Patterns_Fractals(CStudyControl m) : base(m) { }
 
