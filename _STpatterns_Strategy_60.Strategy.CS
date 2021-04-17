@@ -442,15 +442,16 @@ namespace PowerLanguage.Function
                     if (OverrideOrder)
                     {
                         // lock price
-                        if (EntryPriceLocked == false)
-                        {
-                            EPv = value;
-                            EntryPriceLocked = true;
-                        }
-                        else
-                        {
-                            EPv = value;
-                        }
+                        //if (EntryPriceLocked == false)
+                        //{
+                        //    EPv = value;
+                        //    EntryPriceLocked = true;
+                        //}
+                        //else
+                        //{
+                        //    EPv = value;
+                        //}
+                        LockPrice(value, ref EntryPriceLocked, ref EPv);
                     }
                 }
 
@@ -458,18 +459,35 @@ namespace PowerLanguage.Function
                 else
                 {
                     // lock price
-                    if (EntryPriceLocked == false)
-                    {
-                        EPv = value;
-                        EntryPriceLocked = true;
-                    }
-                    else
-                    {
-                        EPv = value;
-                    }
+                    //if (EntryPriceLocked == false)
+                    //{
+                    //    EPv = value;
+                    //    EntryPriceLocked = true;
+                    //}
+                    //else
+                    //{
+                    //    EPv = value;
+                    //}
+                    LockPrice(value, ref EntryPriceLocked, ref EPv);
+
                 }
             }
         }
+        private void LockPrice(double price, ref bool priceLock, ref double priceField)
+        {
+            // value type is passing through by a new copy, does not affect old value when
+            // manipulated
+            if (priceLock == false)
+            {
+                priceField = price;
+                priceLock = true;
+            }
+            else
+            {
+                priceField = price;
+            }
+        }
+
         public bool EntryLock { get; set; }
         public double StopLossPrice
         {
