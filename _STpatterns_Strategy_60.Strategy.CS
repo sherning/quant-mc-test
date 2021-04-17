@@ -72,11 +72,15 @@ namespace PowerLanguage.Strategy
 
         // references
         ST_Patterns_ADR ADRf;
+        ST_Patterns_OrderInfo LongEntry, ShortEntry;
         IOrderPriced LongStopEntry, ShortStopEntry, LongStopLoss, ShortStopLoss;
         IOrderPriced LongProfitTarget, ShortProfitTarget;
         protected override void Create()
         {
             ADRf = new ST_Patterns_ADR(this);
+
+            LongEntry = new ST_Patterns_OrderInfo(this, EMarketPositionSide.Long);
+            ShortEntry = new ST_Patterns_OrderInfo(this, EMarketPositionSide.Short);
 
             LongStopEntry = OrderCreator.Stop(new SOrderParameters(
                 Contracts.UserSpecified, "LE", EOrderAction.Buy));
@@ -107,7 +111,7 @@ namespace PowerLanguage.Strategy
         double OneTick, EntryOffset;
         bool CorridorLock;
         double UpperCorridor, LowerCorridor;
-        int[] MarketPosition;
+        int[] LeState, SeState;
         int UpperFractalDir, LowerFractalDir;
         double RiskValue;
 
@@ -117,7 +121,8 @@ namespace PowerLanguage.Strategy
             ADRf.ConvertToPips = false;
 
             // market position
-            MarketPosition = new int[3];
+            LeState = new int[3];
+            SeState = new int[3];
 
             // cache the last 10 fractals
             UpperFractal = new Fractal[NumOfFractals];
@@ -147,6 +152,51 @@ namespace PowerLanguage.Strategy
 
         protected override void CalcBar()
         {
+            // run full test on Order Info First
+            // track state
+            Shift(LeState.Length, LeState);
+            LeState[0] = LongEntry.Value;
+
+            Shift(SeState.Length, SeState);
+            SeState[0] = ShortEntry.Value;
+
+            if (Bars.CurrentBar % 20 == 0 && Bars.Status == EBarState.Close)
+            {
+                LongEntry.OverrideOrder = false;
+                LongEntry.EntryPrice = Bars.High[0] + (OneTick * 10);
+                LongEntry.EntryLock = true;
+
+                LongEntry.StopLossPrice = Bars.Low[0] - (20 * OneTick * 10);
+                LongEntry.StopLossLock = true;
+
+                LongEntry.ProfitTargetPrice = Bars.High[0] + (60 * OneTick * 10);
+                LongEntry.ProfitTargetLock = true;
+
+                LongEntry.Lock = true;
+                LongEntry.Contracts = FixContracts;
+                LongEntry.TimeInForce = 15;
+            }
+
+            if (LeState[0] == 1)
+                LongStopEntry.Send(LongEntry.EntryPrice, LongEntry.Contracts);
+
+            if (LeState[0] == 2)
+            {
+                LongStopLoss.Send(LongEntry.StopLossPrice, LongEntry.Contracts);
+                LongProfitTarget.Send(LongEntry.ProfitTargetPrice, LongEntry.Contracts);
+            }
+
+        }
+
+        private void Debug1()
+        {
+            // check order status
+            Shift(LeState.Length, LeState);
+            LeState[0] = LongEntry.Value;
+
+            Shift(SeState.Length, SeState);
+            SeState[0] = ShortEntry.Value;
+
             // bar close calculations
             if (Bars.Status == EBarState.Close && CurrentBarTime != Bars.Time[0])
             {
@@ -168,10 +218,6 @@ namespace PowerLanguage.Strategy
             // intrabar calculations
             if (Bars.Status != EBarState.Close)
             {
-                // market position
-                Shift(MarketPosition.Length, MarketPosition);
-                MarketPosition[0] = StrategyInfo.MarketPosition;
-
                 // cache
                 double upperFrac = UpperFractal[0].Price;
                 double lowerFrac = LowerFractal[0].Price;
@@ -188,6 +234,8 @@ namespace PowerLanguage.Strategy
                         UpperCorridor = upperFrac;
                         LowerCorridor = lowerFrac;
                         CorridorLock = true;
+
+                        // draw the corridor
                     }
                 }
 
@@ -195,48 +243,50 @@ namespace PowerLanguage.Strategy
                 if (Bars.CurrentBar > 500)
                 {
                     // send entry orders
-                    if (CorridorLock && MarketPosition[0] == 0)
+                    if (CorridorLock)
                     {
-                        double longEntryPrice = UpperCorridor + EntryOffset;
-                        LongStopEntry.Send(longEntryPrice, FixContracts);
-                        PlotLines(longEntryPrice, Color.LimeGreen);
+                        LongEntry.EntryPrice = UpperCorridor + EntryOffset;
+                        LongEntry.Contracts = FixContracts;
 
-                        double shortEntryPrice = LowerCorridor - EntryOffset;
-                        ShortStopEntry.Send(shortEntryPrice, FixContracts);
-                        PlotLines(shortEntryPrice, Color.Red);
+                        ShortEntry.EntryPrice = LowerCorridor - EntryOffset;
+                        ShortEntry.Contracts = FixContracts;
+
+                        if (LeState[0] == 1)
+                            LongStopEntry.Send(LongEntry.EntryPrice, LongEntry.Contracts);
+
+                        if (SeState[0] == -1)
+                            ShortStopEntry.Send(ShortEntry.EntryPrice, ShortEntry.Contracts);
                     }
 
-                    // send Long exit orders
-                    if (MarketPosition[0] > 0)
+                    // long order filled
+                    if (LeState[0] == 2 && SeState[0] < 0)
                     {
-                        LongStopLoss.Send(LowerCorridor, FixContracts);
+                        ShortEntry.ResetOrders();
 
-                        double longEntryPrice = UpperCorridor + EntryOffset;
-                        PlotLines(longEntryPrice, Color.Green);
-                        PlotLines(LowerCorridor, Color.Yellow);
+                        LongEntry.StopLossPrice = LowerCorridor;
+                        LongEntry.ProfitTargetPrice =
+                            LongEntry.EntryPrice + ((LongEntry.EntryPrice - LowerCorridor) * RiskReward);
 
-                        double target = longEntryPrice + ((longEntryPrice - LowerCorridor) * RiskReward);
-                        LongProfitTarget.Send(target, FixContracts);
-                        PlotLines(target, Color.Cyan);
-
+                        LongStopLoss.Send(LongEntry.StopLossPrice, LongEntry.Contracts);
+                        LongProfitTarget.Send(LongEntry.ProfitTargetPrice, LongEntry.Contracts);
                     }
 
                     // send short exit orders
-                    if (MarketPosition[0] < 0)
+                    if (SeState[0] == -2 && LeState[0] > 0)
                     {
-                        ShortStopLoss.Send(UpperCorridor, FixContracts);
+                        LongEntry.ResetOrders();
 
-                        double shortEntryPrice = LowerCorridor - EntryOffset;
-                        PlotLines(shortEntryPrice, Color.Red);
-                        PlotLines(UpperCorridor, Color.Yellow);
+                        ShortEntry.StopLossPrice = UpperCorridor;
+                        ShortEntry.ProfitTargetPrice =
+                            ShortEntry.EntryPrice - ((UpperCorridor - ShortEntry.EntryPrice) * RiskReward);
 
-                        double target = shortEntryPrice - ((UpperCorridor - shortEntryPrice) * RiskReward);
-                        ShortProfitTarget.Send(target, FixContracts);
-                        PlotLines(target, Color.Cyan);
+                        ShortStopLoss.Send(ShortEntry.StopLossPrice, ShortEntry.Contracts);
+                        ShortProfitTarget.Send(ShortEntry.ProfitTargetPrice, ShortEntry.Contracts);
                     }
 
-                    // reset 
-                    if (MarketPosition[0] == 0 && MarketPosition[1] != 0)
+                    // reset
+                    if ((LeState[1] == 2 && LeState[0] == 0) ||
+                        (SeState[1] == -2 && SeState[0] == 0))
                     {
                         CorridorLock = false;
                         UpperCorridor = LowerCorridor = 0;
@@ -260,6 +310,7 @@ namespace PowerLanguage.Strategy
                 StrategyInfo.SetPlotValue(2, LowerFractal[0].Price);
             }
         }
+
 
         private void CheckForUpperFractal()
         {
@@ -375,7 +426,7 @@ namespace PowerLanguage.Function
         //=========================================================================================
         // References   : 
         // Obectives    : Keep track of single entry, single stop-loss and single target
-        // Remarks      : 
+        // Remarks      : Use series to implicitly invoke CalcBar()
         //=========================================================================================
 
         public string OrderName { get; set; }
@@ -385,75 +436,146 @@ namespace PowerLanguage.Function
             get { return EPv; }
             set
             {
-                // lock price
-                if (Lock)
+                // exisiting order
+                if (EPv > 0)
                 {
-                    if (EntryPriceLock == false)
+                    if (OverrideOrder)
                     {
-                        EPv = value;
-                        EntryPriceLock = true;
+                        // lock price
+                        if (EntryPriceLocked == false)
+                        {
+                            EPv = value;
+                            EntryPriceLocked = true;
+                        }
+                        else
+                        {
+                            EPv = value;
+                        }
                     }
                 }
+
+                // new order
                 else
                 {
-                    EPv = value;
+                    // lock price
+                    if (EntryPriceLocked == false)
+                    {
+                        EPv = value;
+                        EntryPriceLocked = true;
+                    }
+                    else
+                    {
+                        EPv = value;
+                    }
                 }
             }
         }
+        public bool EntryLock { get; set; }
         public double StopLossPrice
         {
             get { return SLv; }
             set
             {
-                if (Lock)
+                // existing order
+                if (SLv > 0)
                 {
-                    if (StopLossPriceLock == false)
+                    if (OverrideOrder)
                     {
-                        SLv = value;
-                        StopLossPriceLock = true;
+                        if (StopLossPriceLocked == false)
+                        {
+                            SLv = value;
+                            StopLossPriceLocked = true;
+                        }
+                        else
+                        {
+                            SLv = value;
+                        }
                     }
                 }
+
+                // new order
                 else
                 {
-                    SLv = value;
+                    if (StopLossPriceLocked == false)
+                    {
+                        SLv = value;
+                        StopLossPriceLocked = true;
+                    }
+                    else
+                    {
+                        SLv = value;
+                    }
                 }
             }
         }
+        public bool StopLossLock { get; set; }
         public double ProfitTargetPrice
         {
             get { return PTv; }
             set
             {
-                if (Lock)
+                if (PTv > 0)
                 {
-                    if (ProfitTargetLock == false)
+                    if (OverrideOrder)
                     {
-                        PTv = value;
-                        ProfitTargetLock = true;
+                        if (ProfitTargetLocked == false)
+                        {
+                            PTv = value;
+                            ProfitTargetLocked = true;
+                        }
+                        else
+                        {
+                            PTv = value;
+                        }
                     }
                 }
                 else
                 {
-                    PTv = value;
+
+                    if (ProfitTargetLocked == false)
+                    {
+                        PTv = value;
+                        ProfitTargetLocked = true;
+                    }
+                    else
+                    {
+                        PTv = value;
+                    }
                 }
             }
         }
+        public bool ProfitTargetLock { get; set; }
         public int Contracts
         {
             get { return Qty; }
             set
             {
-                if (Lock)
+                if (Qty > 0)
+                {
+                    if (OverrideOrder)
+                    {
+                        if (ContractLock == false)
+                        {
+                            Qty = value;
+                            ContractLock = true;
+                        }
+                        else
+                        {
+                            Qty = value;
+                        }
+                    }
+                }
+                else
                 {
                     if (ContractLock == false)
                     {
                         Qty = value;
                         ContractLock = true;
                     }
-                }
-                else
-                {
-                    Qty = value;
+                    else
+                    {
+                        Qty = value;
+                    }
                 }
             }
         }
@@ -462,21 +584,68 @@ namespace PowerLanguage.Function
             get { return TIF; }
             set
             {
-                if (Lock)
+                // existing TIF usually dont exceed 500
+                if (TIF < 500 && OverrideOrder)
                 {
-                    if (TimeInForceLock == false)
+                    if (Lock)
                     {
-                        TIF = value;
-                        TimeInForceLock = true;
+                        if (TimeInForceLock == false)
+                        {
+                            if (value < 1)
+                                TIF = 999;
+                            else
+                            {
+                                TIF = value;
+                                TimeInForceLock = true;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        if (value < 1)
+                            TIF = 999;
+                        else
+                        {
+                            TIF = value;
+                            TimeInForceLock = true;
+                        }
                     }
                 }
+
+                // new TIF value or set to default
                 else
                 {
-                    TIF = value;
+                    if (Lock)
+                    {
+                        if (TimeInForceLock == false)
+                        {
+                            if (value < 1)
+                                TIF = 999;
+                            else
+                            {
+                                TIF = value;
+                                TimeInForceLock = true;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        if (value < 1)
+                            TIF = 999;
+                        else
+                        {
+                            TIF = value;
+                            TimeInForceLock = true;
+                        }
+                    }
                 }
             }
         }
+        /// <summary>
+        /// Lock TimeInForce
+        /// </summary>
         public bool Lock { get; set; }
+        public bool OverrideOrder { get; set; }
 
         public ST_Patterns_OrderInfo(CStudyControl m) : base(m) { }
         public ST_Patterns_OrderInfo(CStudyControl m, EMarketPositionSide tradeDirection) : base(m)
@@ -486,12 +655,13 @@ namespace PowerLanguage.Function
 
         // private backing fields
         bool PrintStopLossWord, PrintEntryWord, PrintProfitWord;
-        bool EntryPriceLock, StopLossPriceLock, ProfitTargetLock;
+        bool EntryPriceLocked, StopLossPriceLocked, ProfitTargetLocked;
         bool ContractLock, TimeInForceLock, EntryOrderFilled;
         double EPv, SLv, PTv;
         int Qty, TIF;
         OrderState State;
         int[] MktPos;
+        DateTime CurrentBarTime;
         protected override void StartCalc()
         {
             ResetOrders();
@@ -501,12 +671,14 @@ namespace PowerLanguage.Function
         public void ResetOrders()
         {
             EPv = SLv = PTv = 0;
-            TIF = Qty = 0;
+            Qty = 0;
             TimeInForceLock = ContractLock = false;
             PrintStopLossWord = PrintEntryWord = PrintProfitWord = false;
-            EntryPriceLock = StopLossPriceLock = ProfitTargetLock = false;
+            EntryPriceLocked = StopLossPriceLocked = ProfitTargetLocked = false;
+            Lock = EntryLock = StopLossLock = ProfitTargetLock = false;
             State = OrderState.NoOrders;
-            EntryOrderFilled = false;
+            OverrideOrder = EntryOrderFilled = false;
+            TIF = 999;
         }
 
         protected override int CalcBar()
@@ -518,17 +690,12 @@ namespace PowerLanguage.Function
             // Entry 
             switch (TradeDirection)
             {
-                default:
-                case EMarketPositionSide.Flat:
-                    // property cannot be flat
-                    break;
-
                 case EMarketPositionSide.Long:
                     {
                         if (EntryOrderFilled == false && EPv > 0 && Qty > 0)
                         {
-                            // Entry Order Filled
-                            if (MktPos[0] - MktPos[1] == Qty && Bars.High[0] >= EPv)
+                            // Entry Order Filled, use >= to account for reversal
+                            if (MktPos[0] - MktPos[1] >= Qty && Bars.High[0] >= EPv)
                             {
                                 EntryOrderFilled = true;
                             }
@@ -537,33 +704,108 @@ namespace PowerLanguage.Function
                             else
                             {
                                 PrintStrategyOrders("EP", EPv, Color.LimeGreen, ref PrintEntryWord);
-                                State = OrderState.SendEntryOrders;
+
+                                // time in force valid
+                                if (TIF > 0)
+                                    State = OrderState.SendLongEntryOrders;
+                                else
+                                    ResetOrders();
                             }
                         }
 
                         if (EntryOrderFilled)
                         {
                             // Entry order filled, OSO
-                            State = OrderState.SendExitOrders;
+                            State = OrderState.SendLongExitOrders;
 
+                            // check change in market position for reversal or exits filled
+                            bool exitFilled = MktPos[0] - MktPos[1] <= -Qty;
+
+                            // stop loss active
                             if (SLv > 0)
-                                PrintStrategyOrders("SL", SLv, Color.Yellow, ref PrintStopLossWord);
+                            {
+                                // stop loss hit
+                                if (Bars.Low[0] <= SLv && exitFilled)
+                                    ResetOrders();
+                                else
+                                    // print stop price
+                                    PrintStrategyOrders("SL", SLv, Color.Yellow, ref PrintStopLossWord);
+                            }
 
+                            // profit target active
                             if (PTv > 0)
-                                PrintStrategyOrders("PT", PTv, Color.Cyan, ref PrintProfitWord);
-
-                            // exit orders filled, changed in market position
-                            if (MktPos[0] - MktPos[1] == -Qty)
-                                ResetOrders();
+                            {
+                                // profit target reached
+                                if (Bars.High[0] >= PTv && exitFilled)
+                                    ResetOrders();
+                                else
+                                    // print target price
+                                    PrintStrategyOrders("PT", PTv, Color.Cyan, ref PrintProfitWord);
+                            }
                         }
                     }
                     break;
 
                 case EMarketPositionSide.Short:
                     {
-                        // fill short
+                        if (EntryOrderFilled == false && EPv > 0 && Qty > 0)
+                        {
+                            // Entry Order Filled
+                            if (MktPos[0] - MktPos[1] <= Qty && Bars.Low[0] <= EPv)
+                            {
+                                EntryOrderFilled = true;
+                            }
+
+                            // Send Entry Orders
+                            else
+                            {
+                                PrintStrategyOrders("EP", EPv, Color.Red, ref PrintEntryWord);
+
+                                // time in force valid
+                                if (TIF > 0)
+                                    State = OrderState.SendShortEntryOrders;
+                                else
+                                    ResetOrders();
+                            }
+                        }
+
+                        if (EntryOrderFilled)
+                        {
+                            // Entry order filled, OSO
+                            State = OrderState.SendShortExitOrders;
+
+                            // check change in market position for reversal or exits filled
+                            bool exitFilled = MktPos[0] - MktPos[1] >= Qty;
+
+                            // stop loss active
+                            if (SLv > 0)
+                            {
+                                // stop loss hit
+                                if (Bars.High[0] >= SLv && exitFilled)
+                                    ResetOrders();
+                                else
+                                    PrintStrategyOrders("SL", SLv, Color.Yellow, ref PrintStopLossWord);
+                            }
+
+                            // profit target active
+                            if (PTv > 0)
+                            {
+                                // profit target reached
+                                if (Bars.Low[0] <= PTv && exitFilled)
+                                    ResetOrders();
+                                else
+                                    PrintStrategyOrders("PT", PTv, Color.Cyan, ref PrintProfitWord);
+                            }
+                        }
                     }
                     break;
+            }
+
+            // time in force
+            if (Bars.Status == EBarState.Close && CurrentBarTime != Bars.Time[0])
+            {
+                TIF--;
+                CurrentBarTime = Bars.Time[0];
             }
 
             // track state to send strategy orders
@@ -575,7 +817,7 @@ namespace PowerLanguage.Function
         /// </summary>
         enum OrderState
         {
-            NoOrders, SendEntryOrders, SendExitOrders
+            SendShortExitOrders = -2, SendShortEntryOrders = -1, NoOrders, SendLongEntryOrders, SendLongExitOrders
         }
 
         private void Shift(int period, int[] data)
