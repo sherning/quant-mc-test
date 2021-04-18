@@ -75,6 +75,7 @@ namespace PowerLanguage.Strategy
         ST_Patterns_OrderInfo LongEntry, ShortEntry;
         IOrderPriced LongStopEntry, ShortStopEntry, LongStopLoss, ShortStopLoss;
         IOrderPriced LongProfitTarget, ShortProfitTarget;
+        IOrderMarket LongMktExit, ShortMktExit;
         protected override void Create()
         {
             ADRf = new ST_Patterns_ADR(this);
@@ -99,6 +100,12 @@ namespace PowerLanguage.Strategy
 
             ShortProfitTarget = OrderCreator.Limit(new SOrderParameters(
                 Contracts.UserSpecified, "SX-Tgt", EOrderAction.BuyToCover, OrderExit.FromAll));
+
+            LongMktExit = OrderCreator.MarketNextBar(new SOrderParameters(
+                Contracts.Default, "LX-Mkt", EOrderAction.Sell, OrderExit.FromAll));
+
+            ShortMktExit = OrderCreator.MarketNextBar(new SOrderParameters(
+              Contracts.Default, "SX-Mkt", EOrderAction.BuyToCover, OrderExit.FromAll));
 
             Output.Clear();
         }
@@ -148,6 +155,9 @@ namespace PowerLanguage.Strategy
             UpperFractalDir = LowerFractalDir = 0;
 
             RiskValue = 0;
+
+            LongEntry.OCO = ShortEntry;
+            ShortEntry.OCO = LongEntry;
         }
 
         protected override void CalcBar()
@@ -172,13 +182,15 @@ namespace PowerLanguage.Strategy
                 LongEntry.ProfitTargetPrice = Bars.High[0] + (60 * OneTick * 10);
                 LongEntry.ProfitTargetLock = true;
 
-                LongEntry.Lock = true;
+                LongEntry.TimeInForceLock = true;
                 LongEntry.Contracts = FixContracts;
                 LongEntry.TimeInForce = 15;
             }
 
             if (LeState[0] == 1)
+            {
                 LongStopEntry.Send(LongEntry.EntryPrice, LongEntry.Contracts);
+            }
 
             if (LeState[0] == 2)
             {
@@ -186,6 +198,34 @@ namespace PowerLanguage.Strategy
                 LongProfitTarget.Send(LongEntry.ProfitTargetPrice, LongEntry.Contracts);
             }
 
+            // short test
+            if (Bars.CurrentBar % 70 == 0 && Bars.Status == EBarState.Close)
+            {
+                ShortEntry.OverrideOrder = false;
+                ShortEntry.EntryPrice = Bars.Low[0] - (OneTick * 10);
+                ShortEntry.EntryLock = true;
+                
+                ShortEntry.StopLossPrice = Bars.High[0] + (20 * OneTick * 10);
+                ShortEntry.StopLossLock = true;
+                
+                ShortEntry.ProfitTargetPrice = Bars.Low[0] - (60 * OneTick * 10);
+                ShortEntry.ProfitTargetLock = true;
+                
+                ShortEntry.TimeInForceLock = true;
+                ShortEntry.Contracts = FixContracts;
+                ShortEntry.TimeInForce = 15;
+            }
+
+            if (SeState[0] == -1)
+            {
+                ShortStopEntry.Send(ShortEntry.EntryPrice, ShortEntry.Contracts);
+            }
+
+            if (SeState[0] == -2)
+            {
+                ShortStopLoss.Send(ShortEntry.StopLossPrice, ShortEntry.Contracts);
+                ShortProfitTarget.Send(ShortEntry.ProfitTargetPrice, ShortEntry.Contracts);
+            }
         }
 
         private void Debug1()
@@ -440,39 +480,137 @@ namespace PowerLanguage.Function
                 if (EPv > 0)
                 {
                     if (OverrideOrder)
-                    {
-                        // lock price
-                        //if (EntryPriceLocked == false)
-                        //{
-                        //    EPv = value;
-                        //    EntryPriceLocked = true;
-                        //}
-                        //else
-                        //{
-                        //    EPv = value;
-                        //}
                         LockPrice(value, ref EntryPriceLocked, ref EPv);
-                    }
                 }
 
                 // new order
                 else
                 {
-                    // lock price
-                    //if (EntryPriceLocked == false)
-                    //{
-                    //    EPv = value;
-                    //    EntryPriceLocked = true;
-                    //}
-                    //else
-                    //{
-                    //    EPv = value;
-                    //}
                     LockPrice(value, ref EntryPriceLocked, ref EPv);
-
                 }
             }
         }
+        public bool EntryLock { get; set; }
+        public double StopLossPrice
+        {
+            get { return SLv; }
+            set
+            {
+                // existing order
+                if (SLv > 0)
+                {
+                    if (OverrideOrder)
+                        LockPrice(value, ref StopLossPriceLocked, ref SLv);
+                }
+
+                // new order
+                else
+                {
+                    LockPrice(value, ref StopLossPriceLocked, ref SLv);
+                }
+            }
+        }
+        public bool StopLossLock { get; set; }
+        public double ProfitTargetPrice
+        {
+            get { return PTv; }
+            set
+            {
+                if (PTv > 0)
+                {
+                    if (OverrideOrder)
+                        LockPrice(value, ref ProfitTargetLocked, ref PTv);
+                }
+                else
+                {
+                    LockPrice(value, ref ProfitTargetLocked, ref PTv);
+                }
+            }
+        }
+        public bool ProfitTargetLock { get; set; }
+        public int Contracts
+        {
+            get { return Qty; }
+            set
+            {
+                if (Qty > 0)
+                {
+                    if (OverrideOrder)
+                        LockPrice(value, ref ContractLock, ref Qty);
+
+                }
+                else
+                {
+                    LockPrice(value, ref ContractLock, ref Qty);
+                }
+            }
+        }
+        public int TimeInForce
+        {
+            get { return TIF; }
+            set
+            {
+                // existing TIF usually dont exceed 500
+                if (TIF < 500 && OverrideOrder)
+                {
+                    if (TimeInForceLock)
+                    {
+                        if (TimeInForceLocked == false)
+                        {
+                            if (value < 1)
+                                TIF = 999;
+                            else
+                            {
+                                TIF = value;
+                                TimeInForceLocked = true;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        if (value < 1)
+                            TIF = 999;
+                        else
+                        {
+                            TIF = value;
+                            TimeInForceLocked = true;
+                        }
+                    }
+                }
+
+                // new TIF value or set to default
+                else
+                {
+                    if (TimeInForceLock)
+                    {
+                        if (TimeInForceLocked == false)
+                        {
+                            if (value < 1)
+                                TIF = 999;
+                            else
+                            {
+                                TIF = value;
+                                TimeInForceLocked = true;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        if (value < 1)
+                            TIF = 999;
+                        else
+                        {
+                            TIF = value;
+                            TimeInForceLocked = true;
+                        }
+                    }
+                }
+            }
+        }
+        public bool TimeInForceLock { get; set; }
+        public bool OverrideOrder { get; set; }
+        public ST_Patterns_OrderInfo OCO { get; set; }
+
         private void LockPrice(double price, ref bool priceLock, ref double priceField)
         {
             // value type is passing through by a new copy, does not affect old value when
@@ -487,183 +625,20 @@ namespace PowerLanguage.Function
                 priceField = price;
             }
         }
-
-        public bool EntryLock { get; set; }
-        public double StopLossPrice
+        private void LockPrice(int price, ref bool priceLock, ref int priceField)
         {
-            get { return SLv; }
-            set
+            // value type is passing through by a new copy, does not affect old value when
+            // manipulated
+            if (priceLock == false)
             {
-                // existing order
-                if (SLv > 0)
-                {
-                    if (OverrideOrder)
-                    {
-                        if (StopLossPriceLocked == false)
-                        {
-                            SLv = value;
-                            StopLossPriceLocked = true;
-                        }
-                        else
-                        {
-                            SLv = value;
-                        }
-                    }
-                }
-
-                // new order
-                else
-                {
-                    if (StopLossPriceLocked == false)
-                    {
-                        SLv = value;
-                        StopLossPriceLocked = true;
-                    }
-                    else
-                    {
-                        SLv = value;
-                    }
-                }
+                priceField = price;
+                priceLock = true;
+            }
+            else
+            {
+                priceField = price;
             }
         }
-        public bool StopLossLock { get; set; }
-        public double ProfitTargetPrice
-        {
-            get { return PTv; }
-            set
-            {
-                if (PTv > 0)
-                {
-                    if (OverrideOrder)
-                    {
-                        if (ProfitTargetLocked == false)
-                        {
-                            PTv = value;
-                            ProfitTargetLocked = true;
-                        }
-                        else
-                        {
-                            PTv = value;
-                        }
-                    }
-                }
-                else
-                {
-
-                    if (ProfitTargetLocked == false)
-                    {
-                        PTv = value;
-                        ProfitTargetLocked = true;
-                    }
-                    else
-                    {
-                        PTv = value;
-                    }
-                }
-            }
-        }
-        public bool ProfitTargetLock { get; set; }
-        public int Contracts
-        {
-            get { return Qty; }
-            set
-            {
-                if (Qty > 0)
-                {
-                    if (OverrideOrder)
-                    {
-                        if (ContractLock == false)
-                        {
-                            Qty = value;
-                            ContractLock = true;
-                        }
-                        else
-                        {
-                            Qty = value;
-                        }
-                    }
-                }
-                else
-                {
-                    if (ContractLock == false)
-                    {
-                        Qty = value;
-                        ContractLock = true;
-                    }
-                    else
-                    {
-                        Qty = value;
-                    }
-                }
-            }
-        }
-        public int TimeInForce
-        {
-            get { return TIF; }
-            set
-            {
-                // existing TIF usually dont exceed 500
-                if (TIF < 500 && OverrideOrder)
-                {
-                    if (Lock)
-                    {
-                        if (TimeInForceLock == false)
-                        {
-                            if (value < 1)
-                                TIF = 999;
-                            else
-                            {
-                                TIF = value;
-                                TimeInForceLock = true;
-                            }
-                        }
-                    }
-                    else
-                    {
-                        if (value < 1)
-                            TIF = 999;
-                        else
-                        {
-                            TIF = value;
-                            TimeInForceLock = true;
-                        }
-                    }
-                }
-
-                // new TIF value or set to default
-                else
-                {
-                    if (Lock)
-                    {
-                        if (TimeInForceLock == false)
-                        {
-                            if (value < 1)
-                                TIF = 999;
-                            else
-                            {
-                                TIF = value;
-                                TimeInForceLock = true;
-                            }
-                        }
-                    }
-                    else
-                    {
-                        if (value < 1)
-                            TIF = 999;
-                        else
-                        {
-                            TIF = value;
-                            TimeInForceLock = true;
-                        }
-                    }
-                }
-            }
-        }
-        /// <summary>
-        /// Lock TimeInForce
-        /// </summary>
-        public bool Lock { get; set; }
-        public bool OverrideOrder { get; set; }
 
         public ST_Patterns_OrderInfo(CStudyControl m) : base(m) { }
         public ST_Patterns_OrderInfo(CStudyControl m, EMarketPositionSide tradeDirection) : base(m)
@@ -674,12 +649,13 @@ namespace PowerLanguage.Function
         // private backing fields
         bool PrintStopLossWord, PrintEntryWord, PrintProfitWord;
         bool EntryPriceLocked, StopLossPriceLocked, ProfitTargetLocked;
-        bool ContractLock, TimeInForceLock, EntryOrderFilled;
+        bool ContractLock, TimeInForceLocked, EntryOrderFilled;
         double EPv, SLv, PTv;
-        int Qty, TIF;
+        int Qty, TIF, TradeDuration;
         OrderState State;
         int[] MktPos;
         DateTime CurrentBarTime;
+        
         protected override void StartCalc()
         {
             ResetOrders();
@@ -690,13 +666,14 @@ namespace PowerLanguage.Function
         {
             EPv = SLv = PTv = 0;
             Qty = 0;
-            TimeInForceLock = ContractLock = false;
+            TimeInForceLocked = ContractLock = false;
             PrintStopLossWord = PrintEntryWord = PrintProfitWord = false;
             EntryPriceLocked = StopLossPriceLocked = ProfitTargetLocked = false;
-            Lock = EntryLock = StopLossLock = ProfitTargetLock = false;
+            TimeInForceLock = EntryLock = StopLossLock = ProfitTargetLock = false;
             State = OrderState.NoOrders;
             OverrideOrder = EntryOrderFilled = false;
             TIF = 999;
+            TradeDuration = 0;
         }
 
         protected override int CalcBar()
@@ -704,6 +681,8 @@ namespace PowerLanguage.Function
             // Check on Market Position
             Shift(MktPos.Length, MktPos);
             MktPos[0] = StrategyInfo.MarketPosition;
+
+            bool oco = OCO != null ? true : false;
 
             // Entry 
             switch (TradeDirection)
@@ -733,6 +712,18 @@ namespace PowerLanguage.Function
 
                         if (EntryOrderFilled)
                         {
+                            // check oco active, and trade is short side
+                            if (oco && OCO.TradeDirection == EMarketPositionSide.Short)
+                            {
+                                // OCO order filled 
+                                if (OCO.State == OrderState.SendShortExitOrders && 
+                                    OCO.TradeDuration < this.TradeDuration)
+                                {
+                                    ResetOrders();
+                                    return (int)State;
+                                }
+                            }
+
                             // Entry order filled, OSO
                             State = OrderState.SendLongExitOrders;
 
@@ -789,6 +780,18 @@ namespace PowerLanguage.Function
 
                         if (EntryOrderFilled)
                         {
+                            // check oco active, and trade is short side
+                            if (oco && OCO.TradeDirection == EMarketPositionSide.Long)
+                            {
+                                // OCO order filled 
+                                if (OCO.State == OrderState.SendLongExitOrders &&
+                                    OCO.TradeDuration < this.TradeDuration)
+                                {
+                                    ResetOrders();
+                                    return (int)State;
+                                }
+                            }
+
                             // Entry order filled, OSO
                             State = OrderState.SendShortExitOrders;
 
@@ -824,6 +827,10 @@ namespace PowerLanguage.Function
             {
                 TIF--;
                 CurrentBarTime = Bars.Time[0];
+
+                // Track state duration
+                if (State == OrderState.SendLongExitOrders || State == OrderState.SendShortExitOrders)
+                    TradeDuration++;
             }
 
             // track state to send strategy orders
@@ -835,7 +842,8 @@ namespace PowerLanguage.Function
         /// </summary>
         enum OrderState
         {
-            SendShortExitOrders = -2, SendShortEntryOrders = -1, NoOrders, SendLongEntryOrders, SendLongExitOrders
+            SendShortMktExit = -3, SendShortExitOrders = -2, SendShortEntryOrders = -1, 
+            NoOrders, SendLongEntryOrders, SendLongExitOrders, SendLongMktExit 
         }
 
         private void Shift(int period, int[] data)
