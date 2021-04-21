@@ -125,7 +125,7 @@ namespace PowerLanguage.Strategy
                 LXLmt.Send(LE[2].ProfitPrice, LE[2].Quantity);
             }
 
-            if(CurrentTime != Bars.Time[0])
+            if (CurrentTime != Bars.Time[0])
             {
                 CurrentTime = Bars.Time[0];
                 MktOnce = false;
@@ -155,6 +155,185 @@ namespace PowerLanguage.Strategy
 
 namespace PowerLanguage.Function
 {
+    public sealed class BracketEntryOSO : FunctionSeries<int>
+    {
+        //================================= Project Documentation =================================
+        // Project Name : Bracket Entry OSO
+        // Platform     : Multicharts
+        // Class Type   : Strategy
+        // Date         : 21 Apr 2021
+        // Version      : v.1.0.0
+        // Developer    : Sher Ning
+        //=========================================================================================
+        // Copyright    : 2021, Sher Ning Technologies           
+        // License      : Internal use
+        // Client       : Sher Ning
+        // Contact      : sherning@hotmail.com
+        //=========================================================================================
+        // References   : 
+        // Obectives    : Bracket OSO strategy orders
+        // Remarks      : 
+        //=========================================================================================
+
+
+        public double LEStpPrice { get; set; }
+        public double LELmtPrice { get; set; }
+        public double SEStpPrice { get; set; }
+        public double SELmtPrice { get; set; }
+
+        public double LXStpPrice { get; set; }
+        public double LXStpPrice2 { get; set; }
+
+        public double LXLmtPrice { get; set; }
+        public double LXLmtPrice2 { get; set; }
+
+        public double SXStpPrice { get; set; }
+        public double SXStpPrice2 { get; set; }
+
+        public double SXLmtPrice { get; set; }
+        public double SXLmtPrice2 { get; set; }
+
+        // other properties
+        public int Quantity { get; set; }
+        public int TimeInForce { get; set; }
+
+
+        public BracketEntryOSO(CStudyControl m) : base(m) { }
+
+        SingleEntryOSO LELmt, LEStp, SELmt, SEStp;
+        protected override void Create()
+        {
+            LELmt = new SingleEntryOSO(this, OrderCategory.Limit, EMarketPositionSide.Long);
+            LEStp = new SingleEntryOSO(this, OrderCategory.Stop, EMarketPositionSide.Long);
+            SELmt = new SingleEntryOSO(this, OrderCategory.Limit, EMarketPositionSide.Short);
+            SEStp = new SingleEntryOSO(this, OrderCategory.Stop, EMarketPositionSide.Short);
+        }
+       
+        protected override void StartCalc() { }
+
+        protected override int CalcBar()
+        {
+            // check 
+            if (Quantity > 0)
+            {
+                // double break
+                if (LEStpPrice > 0 && SEStpPrice > 0)
+                {
+                    // entry price
+                    LEStp.EntryPrice = LEStpPrice;
+                    SEStp.EntryPrice = SEStpPrice;
+
+                    // Quantity
+                    LEStp.Quantity = SEStp.Quantity = Quantity;
+
+                    // Time in force
+                    LEStp.TimeInForce = SEStp.TimeInForce = TimeInForce;
+
+                    // Long Exit
+                    if (LXLmtPrice > 0 && LXStpPrice > 0)
+                    {
+                        LEStp.StopLossPrice = LXStpPrice;
+                        LEStp.ProfitPrice = LXLmtPrice;
+                    }
+
+                    // Short Exit
+                    if (SXLmtPrice > 0 && SXStpPrice > 0)
+                    {
+                        SEStp.StopLossPrice = SXStpPrice;
+                        SEStp.ProfitPrice = SXLmtPrice;
+                    }
+                }
+
+                // double fade
+                else if (LELmtPrice > 0 && SELmtPrice > 0)
+                {
+                    // entry price
+                    LELmt.EntryPrice = LELmtPrice;
+                    SELmt.EntryPrice = SELmtPrice;
+
+                    // quantity
+                    LELmt.Quantity = SELmt.Quantity = Quantity;
+
+                    // time in force
+                    LELmt.TimeInForce = SELmt.TimeInForce = TimeInForce;
+
+                    // Long Exit
+                    if (LXLmtPrice > 0 && LXStpPrice > 0)
+                    {
+                        LELmt.StopLossPrice = LXStpPrice;
+                        LELmt.ProfitPrice = LXLmtPrice;
+                    }
+
+                    // Short Exit
+                    if (SXLmtPrice > 0 && SXStpPrice > 0)
+                    {
+                        SELmt.StopLossPrice = SXStpPrice;
+                        SELmt.ProfitPrice = SXLmtPrice;
+                    }
+                }
+
+                // double long
+                else if (LEStpPrice > 0 && LELmtPrice > 0)
+                {
+                    // entry price
+                    LEStp.EntryPrice = LEStpPrice;
+                    LELmt.EntryPrice = LELmtPrice;
+
+                    // Quantity
+                    LELmt.Quantity = LEStp.Quantity = Quantity;
+
+                    // Time in force
+                    LEStp.TimeInForce = LELmt.TimeInForce = TimeInForce;
+
+                    // Long Exit - Limit
+                    if (LXLmtPrice > 0 && LXStpPrice > 0)
+                    {
+                        LELmt.StopLossPrice = LXStpPrice;
+                        LELmt.ProfitPrice = LXLmtPrice;
+                    }
+
+                    // Long Exit - Stop
+                    if (LXLmtPrice2 > 0 && LXStpPrice2 > 0)
+                    {
+                        LEStp.StopLossPrice = LXStpPrice2;
+                        LEStp.ProfitPrice = LXLmtPrice2;
+                    }
+                }
+
+                // double short
+                else if (SEStpPrice > 0 && SELmtPrice > 0)
+                {
+                    // entry price
+                    SEStp.EntryPrice = SEStpPrice;
+                    SELmt.EntryPrice = SELmtPrice;
+
+                    // Quantity
+                    SEStp.Quantity = SELmt.Quantity = Quantity;
+
+                    // Time in force
+                    SEStp.TimeInForce = SELmt.TimeInForce = TimeInForce;
+
+                    // Short Exit - Limit
+                    if (SXLmtPrice > 0 && SXStpPrice > 0)
+                    {
+                        SELmt.StopLossPrice = SXStpPrice;
+                        SELmt.ProfitPrice = SXLmtPrice;
+                    }
+
+                    // Short Exit - Stop
+                    if (SXLmtPrice2 > 0 && SXStpPrice2 > 0)
+                    {
+                        SEStp.StopLossPrice = SXStpPrice2;
+                        SEStp.ProfitPrice = SXLmtPrice2;
+                    }
+                }
+            }
+           
+
+            return 0;
+        }
+    }
+
     public sealed class SingleEntryOSO : FunctionSeries<int>
     {
         //================================= Project Documentation =================================
@@ -211,8 +390,6 @@ namespace PowerLanguage.Function
             EntryOrderType = category;
             OrderSide = side;
         }
-
-        protected override void Create() { }
 
         // once initialized cannot change
         readonly EMarketPositionSide OrderSide;
