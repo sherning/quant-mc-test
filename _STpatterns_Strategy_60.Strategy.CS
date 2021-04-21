@@ -695,6 +695,10 @@ namespace PowerLanguage.Function
                             if (MktPos[0] - MktPos[1] >= Qty && Bars.High[0] >= EPv)
                             {
                                 EntryOrderFilled = true;
+
+                                // check if there are any exit orders, otherwise reset
+                                if (SLv <= 0 && PTv <= 0)
+                                    ResetOrders();
                             }
 
                             // Send Entry Orders
