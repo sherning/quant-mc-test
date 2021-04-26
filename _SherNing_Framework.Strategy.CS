@@ -7,7 +7,9 @@ using System.Diagnostics;
 
 namespace PowerLanguage.Strategy
 {
-    [IOGMode(IOGMode.Enabled)]
+    // allowsendorderalways default is false, must be set inside code, best used with illiquid symbols
+    // or when recalculate() is being used, and must be used together with IOG true
+    [IOGMode(IOGMode.Enabled), AllowSendOrdersAlways(true)]
     public class _SherNing_Framework : SignalObject
     {
         //================================= Project Documentation =================================
@@ -207,7 +209,7 @@ namespace PowerLanguage.Function
         //================================= Project Documentation =================================
         // Project Name : Single Entry with One Stoploss and One Target
         // Platform     : Multicharts
-        // Class Type   : Strategy
+        // Class Type   : Strategy Function
         // Date         : 18 Apr 2021
         // Version      : v.1.0.0
         // Developer    : Sher Ning
@@ -268,20 +270,16 @@ namespace PowerLanguage.Function
         readonly bool SendOneOrderPerBar;
 
         // fields which requires reset
-        bool EntryOrderFilled, TimeInForceLocked, MktOnce;
+        bool EntryOrderFilled, TimeInForceLocked, EntryOncePerBar;
         OrderState State;
         int TIF, CurrentBar;
-
         bool[] PrintedText;
         string[] PrintText;
-        int[] MktPos;
 
         protected override void StartCalc()
         {
-            MktPos = new int[3];
-
             CurrentBar = -1;
-            MktOnce = false;
+            EntryOncePerBar = false;
 
             // [0]: EP, [1]: SL, [2]: PT
             PrintedText = new bool[3];
@@ -293,7 +291,7 @@ namespace PowerLanguage.Function
         {
             EntryPrice = StopLossPrice = ProfitPrice = 0;
             Quantity = 0;
-            TimeInForceLocked = EntryOrderFilled = false;
+            EntryOncePerBar = TimeInForceLocked = EntryOrderFilled = false;
             State = OrderState.NoOrders;
             TIF = 1000;
 
@@ -302,16 +300,7 @@ namespace PowerLanguage.Function
         }
         protected override int CalcBar()
         {
-            Shift(MktPos.Length, MktPos);
-            MktPos[0] = StrategyInfo.MarketPosition;
-
-            // check, simplify and re-do entry orders
-            // reset on every tick or calculation
-            int MktPosDifference = 0;
-
-            // track market position
-            if (MktPos[0] != MktPos[1])
-                MktPosDifference = MktPos[0] - MktPos[1];
+            int mp = StrategyInfo.MarketPosition;
 
             // track order status
             if (OrderSide == EMarketPositionSide.Long)
@@ -319,24 +308,14 @@ namespace PowerLanguage.Function
                 if (EntryOrderFilled == false && Quantity > 0)
                 {
                     // long entry mkt order
-                    if (EntryOrderType == OrderCategory.Market && MktOnce == false)
-                    {
-                        // send once per bar
-                        MktOnce = true;
-
-                        // Order Filled
-                        EntryOrderFilled = true;
-
-                        // check if there are any exit orders, otherwise reset
-                        if (StopLossPrice <= 0 && ProfitPrice <= 0)
-                            ResetOrder();
-                    }
+                    if (EntryOrderType == OrderCategory.Market && EntryOncePerBar == false)
+                        EntryOrderFilled = EntryOncePerBar = true;
 
                     // valid entry price & qty
                     if (EntryPrice > 0)
                     {
                         // long limit entry order
-                        if (EntryOrderType == OrderCategory.Limit)
+                        if (EntryOrderType == OrderCategory.Limit && EntryOncePerBar == false)
                         {
                             double price;
                             if (Environment.IOGEnabled)
@@ -344,9 +323,8 @@ namespace PowerLanguage.Function
                             else
                                 price = Bars.Low[0];
 
-                            if (price <= EntryPrice &&
-                               MktPosDifference == Quantity &&
-                               TIF > 0) EntryOrderFilled = true;
+                            if (price <= EntryPrice && mp > 0 && TIF > 0)
+                                EntryOncePerBar = EntryOrderFilled = true;
                             else
                             {
                                 PrintStrategyOrders(PrintText[0], EntryPrice, Color.LimeGreen, ref PrintedText[0]);
@@ -355,7 +333,7 @@ namespace PowerLanguage.Function
                         }
 
                         // long stop entry order
-                        else if (EntryOrderType == OrderCategory.Stop)
+                        else if (EntryOrderType == OrderCategory.Stop && EntryOncePerBar == false)
                         {
                             double price;
                             if (Environment.IOGEnabled)
@@ -364,9 +342,8 @@ namespace PowerLanguage.Function
                                 price = Bars.High[0];
 
                             // track with price and change in quantity
-                            if (price >= EntryPrice &&
-                              MktPosDifference == Quantity &&
-                              TIF > 0) EntryOrderFilled = true;
+                            if (price >= EntryPrice && mp > 0 && TIF > 0)
+                                EntryOncePerBar = EntryOrderFilled = true;
                             else
                             {
                                 PrintStrategyOrders(PrintText[0], EntryPrice, Color.LimeGreen, ref PrintedText[0]);
@@ -399,13 +376,14 @@ namespace PowerLanguage.Function
                 if (EntryOrderFilled)
                 {
                     // valid stop loss
-                    if (StopLossPrice > 0 && MktPos[0] > 0)
+                    if (StopLossPrice > 0 && mp > 0)
                     {
                         State = OrderState.SendLongExitOrders;
                         PrintStrategyOrders(PrintText[1], StopLossPrice, Color.Yellow, ref PrintedText[1]);
                     }
                     else
                     {
+                        // only useful during IOG calculations
                         if (!SendOneOrderPerBar)
                             State = OrderState.SendNextEntry;
                         else
@@ -413,7 +391,7 @@ namespace PowerLanguage.Function
                     }
 
                     // valid profit target
-                    if (ProfitPrice > 0 && MktPos[0] > 0)
+                    if (ProfitPrice > 0 && mp > 0)
                     {
                         State = OrderState.SendLongExitOrders;
                         PrintStrategyOrders(PrintText[2], ProfitPrice, Color.Cyan, ref PrintedText[2]);
@@ -433,22 +411,14 @@ namespace PowerLanguage.Function
                 if (EntryOrderFilled == false && Quantity > 0)
                 {
                     // short entry mkt order
-                    if (EntryOrderType == OrderCategory.Market && MktOnce == false)
-                    {
-                        MktOnce = EntryOrderFilled = true;
-
-                        // entry time
-
-                        // check if there are any exit orders, otherwise reset
-                        if (StopLossPrice <= 0 && ProfitPrice <= 0)
-                            ResetOrder();
-                    }
+                    if (EntryOrderType == OrderCategory.Market && EntryOncePerBar == false)
+                        EntryOncePerBar = EntryOrderFilled = true;
 
                     // valid entry price
                     if (EntryPrice > 0)
                     {
                         // long limit entry order
-                        if (EntryOrderType == OrderCategory.Limit)
+                        if (EntryOrderType == OrderCategory.Limit && EntryOncePerBar == false)
                         {
                             double price;
                             if (Environment.IOGEnabled)
@@ -456,10 +426,8 @@ namespace PowerLanguage.Function
                             else
                                 price = Bars.High[0];
 
-                            if (price >= EntryPrice &&
-                               MktPosDifference == -Quantity &&
-                               TIF > 0) EntryOrderFilled = true;
-
+                            if (price >= EntryPrice && mp < 0 && TIF > 0)
+                                EntryOncePerBar = EntryOrderFilled = true;
                             else
                             {
                                 PrintStrategyOrders(PrintText[0], EntryPrice, Color.Red, ref PrintedText[0]);
@@ -468,7 +436,7 @@ namespace PowerLanguage.Function
                         }
 
                         // long stop entry order
-                        else if (EntryOrderType == OrderCategory.Stop && MktOnce == false)
+                        else if (EntryOrderType == OrderCategory.Stop && EntryOncePerBar == false)
                         {
                             double price;
                             if (Environment.IOGEnabled)
@@ -476,11 +444,9 @@ namespace PowerLanguage.Function
                             else
                                 price = Bars.Low[0];
 
-                            // track with price and change in quantity
-                            if (price <= EntryPrice &&
-                              MktPosDifference == -Quantity &&
-                              TIF > 0) MktOnce = EntryOrderFilled = true;
-
+                            // entry conditions
+                            if (price <= EntryPrice && mp < 0 && TIF > 0)
+                                EntryOncePerBar = EntryOrderFilled = true;
                             else
                             {
                                 PrintStrategyOrders(PrintText[0], EntryPrice, Color.Red, ref PrintedText[0]);
@@ -505,7 +471,7 @@ namespace PowerLanguage.Function
                             ResetOrder();
                     }
 
-                    // time in force
+                    // time in force 
                     if (TIF <= 1)
                         ResetOrder();
                 }
@@ -514,7 +480,7 @@ namespace PowerLanguage.Function
                 if (EntryOrderFilled)
                 {
                     // valid stop loss
-                    if (StopLossPrice > 0 && MktPos[0] < 0)
+                    if (StopLossPrice > 0 && mp < 0)
                     {
                         State = OrderState.SendShortExitOrders;
                         PrintStrategyOrders(PrintText[1], StopLossPrice, Color.Yellow, ref PrintedText[1]);
@@ -528,7 +494,7 @@ namespace PowerLanguage.Function
                     }
 
                     // valid profit target
-                    if (ProfitPrice > 0 && MktPos[0] < 0)
+                    if (ProfitPrice > 0 && mp < 0)
                     {
                         State = OrderState.SendShortExitOrders;
                         PrintStrategyOrders(PrintText[2], ProfitPrice, Color.Cyan, ref PrintedText[2]);
@@ -543,35 +509,22 @@ namespace PowerLanguage.Function
                 }
             }
 
-            // intra bar reset for next entry
+            // intra bar reset for next trade
             if (State == OrderState.SendNextEntry) ResetOrder();
 
-            // works for both intrabar and end of bar calc()
+            // end of bar reset for next trade
             if (Bars.Status == EBarState.Close && CurrentBar != Bars.CurrentBar)
             {
                 TIF--;
                 CurrentBar = Bars.CurrentBar;
-                MktOnce = false;
+                EntryOncePerBar = false;
 
-                // stop sending intrabar orders, will this affect reversals?
+                // stop sending intrabar orders, will this affect reversals. only affect this.instance
                 if (State == OrderState.FreezeOrder)
-                {
-                    State = OrderState.NoOrders;
-                    ResetOrder();
-                }
+                    ResetOrder(); 
             }
 
             return (int)State;
-        }
-
-        private void Shift(int period, int[] data)
-        {
-            // instance methods
-            if (period >= 2)
-            {
-                data[period - 1] = data[period - 2];
-                Shift(period - 1, data);
-            }
         }
 
         enum OrderState
