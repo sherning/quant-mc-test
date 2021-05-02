@@ -909,7 +909,7 @@ namespace PowerLanguage.Function
                     BarCount[timeframe]++;
             }
 
-            return "No output";
+            return "Bar State == Close";
         }
 
         private void SetTrendDirection(int timeframe)
@@ -1398,11 +1398,17 @@ namespace PowerLanguage.Function
             bool sessionEnd = IsSessionEnd();
 
             // tomorrow is a friday and a bank holiday
-            foreach (var holiday in USHolidays)
+            if (Bars.Info.Category != ESymbolCategory.Cash || 
+                Bars.Info.Category != ESymbolCategory.Forex)
+
+                // with the exception of forex and cash
             {
-                if (tomorrow.Date == holiday.Key.Date &&
-                    tomorrow.DayOfWeek == DayOfWeek.Friday &&
-                    sessionEnd) return true;
+                foreach (var holiday in USHolidays)
+                {
+                    if (tomorrow.Date == holiday.Key.Date &&
+                        tomorrow.DayOfWeek == DayOfWeek.Friday &&
+                        sessionEnd) return true;
+                }
             }
 
             // tomorrow is sat

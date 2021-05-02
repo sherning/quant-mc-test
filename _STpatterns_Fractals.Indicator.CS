@@ -31,12 +31,17 @@ namespace PowerLanguage.Indicator
         [Input] public int BarsAroundFractal { get; set; }
         [Input] public int PointOffset { get; set; }
         [Input] public int TrendArrowOffset { get; set; }
+        [Input] public string DisplaySettings { get; set; }
+        [Input] public bool ShowTrendArrows { get; set; }
         public _STpatterns_Fractals(object _ctx) : base(_ctx) 
         {
             IndicatorSettings = "Indicator Settings";
             BarsAroundFractal = 1;
             PointOffset = 0;
             TrendArrowOffset = 10;
+
+            DisplaySettings = "Display Settings";
+            ShowTrendArrows = false;
         }
 
         // reference types
@@ -81,7 +86,7 @@ namespace PowerLanguage.Indicator
                 fractalValue = Bars.High[BarsAroundFractal];
 
                 // TrendArrow < 0, off plot arrow
-                if (fractalValue > LastUpperFractal && TrendArrowOffset > 0)
+                if (fractalValue > LastUpperFractal && TrendArrowOffset > 0 && ShowTrendArrows)
                 {
                     IArrowObject arrow = DrwArrow.Create(new ChartPoint(
                         // time is X bars ago, price is High + offset X bars ago
@@ -104,7 +109,7 @@ namespace PowerLanguage.Indicator
                 fractalValue = Bars.Low[BarsAroundFractal];
 
                 // TrendArrow < 0, off plot arrow
-                if (fractalValue < LastLowerFractal && TrendArrowOffset > 0)
+                if (fractalValue < LastLowerFractal && TrendArrowOffset > 0 && ShowTrendArrows)
                 {
                     IArrowObject arrow = DrwArrow.Create(new ChartPoint(
                         // time is X bars ago, price is High + offset X bars ago
