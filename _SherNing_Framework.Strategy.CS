@@ -273,8 +273,7 @@ namespace PowerLanguage.Function
         bool EntryOrderFilled, TimeInForceLocked, EntryOncePerBar;
         OrderState State;
         int TIF, CurrentBar;
-        bool[] PrintedText;
-        string[] PrintText;
+      
 
         protected override void StartCalc()
         {
@@ -283,7 +282,6 @@ namespace PowerLanguage.Function
 
             // [0]: EP, [1]: SL, [2]: PT
             PrintedText = new bool[3];
-            PrintText = new string[] { "EP", "SL", "PT" };
 
             ResetOrder();
         }
@@ -551,7 +549,12 @@ namespace PowerLanguage.Function
                 Bars.CurrentBar + ExecInfo.MaxBarsBack,
                 message);
         }
+        #endregion
 
+        #region Print Strategy Orders
+
+        bool[] PrintedText;
+        readonly string[] PrintText = new string[] { "EP", "SL", "PT" };
         private void PrintStrategyOrders(string text, double price, Color color, ref bool once)
         {
             bool closingTick = Bars.Status == EBarState.Close;
