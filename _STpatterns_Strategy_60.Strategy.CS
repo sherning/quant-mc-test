@@ -1,9 +1,6 @@
-﻿using System;
-using System.Drawing;
-using System.Linq;
-using PowerLanguage.Function;
-using ATCenterProxy.interop;
+﻿using PowerLanguage.Function;
 using System.Diagnostics;
+using System.Drawing;
 
 namespace PowerLanguage.Strategy
 {
@@ -94,7 +91,7 @@ namespace PowerLanguage.Strategy
         double UpperLine, LowerLine, LELine, SELine;
         double CorridorHeight, ADRv;
         bool CorridorCondition;
-        OrderState CurrState;
+        Send CurrState;
         OrderInfo LE, SE;
 
         protected override void StartCalc()
@@ -113,7 +110,7 @@ namespace PowerLanguage.Strategy
         private void Reset()
         {
             CorridorCondition = false;
-            CurrState = OrderState.NoOrders;
+            CurrState = Send.No_Orders;
 
             LE = OrderInfo.Reset();
 
@@ -155,12 +152,12 @@ namespace PowerLanguage.Strategy
                 StrategyInfo.SetPlotValue(1, LELine);
                 StrategyInfo.SetPlotValue(2, SELine);
 
-                if (CurrState == OrderState.SendLongEntryOrders)
+                if (CurrState == Send.LE_Orders)
                     LE.TimeInForce--;
 
                 //if (LEOrderInfo.TimeInForce < 0) Reset();
 
-                if (CurrState == OrderState.SendShortEntryOrders)
+                if (CurrState == Send.SE_Orders)
                     SE.TimeInForce--;
 
                 if (SE.TimeInForce < 0 || LE.TimeInForce < 0) Reset();
@@ -176,7 +173,7 @@ namespace PowerLanguage.Strategy
             // long entry send order if
             if (Bars.High[0] > LELine &&
                 CorridorCondition &&
-                CurrState == OrderState.NoOrders &&
+                CurrState == Send.No_Orders &&
                 Bars.CurrentBar > 1000)
             {
                 LE.EntryPrice = LELine;
@@ -185,15 +182,15 @@ namespace PowerLanguage.Strategy
                 LE.BreakEvenPrice = LELine + (BreakEvenRatio * LE.RiskValue);
                 LE.ProfitPrice = LELine + (ProfitTargetRatio * LE.RiskValue);
                 LE.TimeInForce = 10;
-                CurrState = OrderState.SendLongEntryOrders;
+                CurrState = Send.LE_Orders;
             }
 
-            if (CurrState == OrderState.SendLongEntryOrders &&
+            if (CurrState == Send.LE_Orders &&
                 LE.TimeInForce >= 0)
             {
                 if (mktpos > 0)
                 {
-                    CurrState = OrderState.SendLongExitOrders;
+                    CurrState = Send.LX_Orders;
                 }
                 else
                 {
@@ -207,7 +204,7 @@ namespace PowerLanguage.Strategy
                 }
             }
 
-            if (CurrState == OrderState.SendLongExitOrders)
+            if (CurrState == Send.LX_Orders)
             {
                 if (mktpos > 0)
                 {
@@ -248,7 +245,7 @@ namespace PowerLanguage.Strategy
             // short entry send order if
             if (Bars.Low[0] < SELine &&
                 CorridorCondition &&
-                CurrState == OrderState.NoOrders &&
+                CurrState == Send.No_Orders &&
                 Bars.CurrentBar > 1000)
             {
                 SE.EntryPrice = SELine;
@@ -257,15 +254,15 @@ namespace PowerLanguage.Strategy
                 SE.BreakEvenPrice = SELine - (BreakEvenRatio * SE.RiskValue);
                 SE.ProfitPrice = SELine - (ProfitTargetRatio * SE.RiskValue);
                 SE.TimeInForce = 10;
-                CurrState = OrderState.SendShortEntryOrders;
+                CurrState = Send.SE_Orders;
             }
 
-            if (CurrState == OrderState.SendShortEntryOrders &&
+            if (CurrState == Send.SE_Orders &&
                 SE.TimeInForce >= 0)
             {
                 if (mktpos < 0)
                 {
-                    CurrState = OrderState.SendShortExitOrders;
+                    CurrState = Send.SX_Orders;
                 }
                 else
                 {
@@ -279,7 +276,7 @@ namespace PowerLanguage.Strategy
                 }
             }
 
-            if (CurrState == OrderState.SendShortExitOrders)
+            if (CurrState == Send.SX_Orders)
             {
                 if (mktpos < 0)
                 {
@@ -340,10 +337,10 @@ namespace PowerLanguage.Strategy
             return pivot;
         }
 
-        enum OrderState
+        enum Send
         {
-            SendShortExitOrders = -2, SendShortEntryOrders = -1,
-            NoOrders, SendLongEntryOrders, SendLongExitOrders
+            SX_Orders = -2, SE_Orders = -1,
+            No_Orders, LE_Orders, LX_Orders
         }
 
         // enum default is whatever that is value = 0
@@ -430,6 +427,7 @@ namespace PowerLanguage.Strategy
             public double RiskValue { get; set; }
             public double BreakEvenPrice { get; set; }
             public Lock BreakEvenLock { get; set; }
+            public Lock ReversalLock { get; set; }
             public static OrderInfo Reset()
             {
                 return new OrderInfo { TimeInForce = 999 };
