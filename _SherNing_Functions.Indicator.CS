@@ -2052,6 +2052,7 @@ namespace PowerLanguage.Function
                 double oneTick = GetTickValue(1);
                 double valueRisk = priceRisk / oneTick;
 
+                // ES - S & P 500 E-mini
                 if (IsES)
                 {
                     // tick value, one point = $50 USD, one tick = $12.50
@@ -2077,6 +2078,76 @@ namespace PowerLanguage.Function
             tradeSize = (int)rawTradeSize;
             return tradeSize;
         }
+
+        public int Contracts(double entryPrice, double stopLossPrice, double account)
+        {
+            // Check if entry price or stop loss price is 0
+            if (entryPrice == 0 || stopLossPrice == 0) return 0;
+
+            // return tradesize
+            int tradeSize;
+            double rawTradeSize = 0;
+            double dollarRisk = Risk * account * 0.01;
+
+            if (dollarRisk == 0) return 0;
+
+            // calculate price risk
+            double priceRisk = Math.Abs(entryPrice - stopLossPrice);
+            priceRisk = Math.Round(priceRisk, 5);
+
+            // get raw trade size
+            if (Category == ESymbolCategory.Cash || Category == ESymbolCategory.Forex)
+            {
+                // Get pip values.
+                GetPipValues();
+
+                // get fx calculation values
+                double onePip = GetTickValue(10);
+                double pipValue = PipValues[BaseSymbol];
+
+                // calculate numerator and denominator values
+                double valueRisk = (priceRisk / onePip) * pipValue;
+
+                // obtain raw trade size
+                rawTradeSize = (dollarRisk / valueRisk) * 100000;
+
+            }
+            else if (Category == ESymbolCategory.Stock)
+            {
+                rawTradeSize = dollarRisk / priceRisk;
+            }
+            else if (Category == ESymbolCategory.Future)
+            {
+                double oneTick = GetTickValue(1);
+                double valueRisk = priceRisk / oneTick;
+
+                // ES - S & P 500 E-mini
+                if (IsES)
+                {
+                    // tick value, one point = $50 USD, one tick = $12.50
+                    valueRisk *= 12.5;
+                    rawTradeSize = dollarRisk / valueRisk;
+                }
+                else
+                {
+                    // tick value, one point = $1000 USD, one tick = $10
+                    valueRisk *= 10;
+                    rawTradeSize = dollarRisk / valueRisk;
+                }
+            }
+
+            // convert to min step
+            rawTradeSize = StepSize * Math.Floor(rawTradeSize / StepSize);
+
+            // check if min < contracts < max 
+            if (rawTradeSize < MinimumContracts) rawTradeSize = 0;
+            if (rawTradeSize > MaximumContracts) rawTradeSize = MaximumContracts;
+
+            // round down 
+            tradeSize = (int)rawTradeSize;
+            return tradeSize;
+        }
+
 
         #region Forex
         private void GetPipValues()
