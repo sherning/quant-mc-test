@@ -72,13 +72,15 @@ namespace PowerLanguage.Strategy
 
             SXLmt = OrderCreator.Limit(new SOrderParameters
                 (Contracts.UserSpecified, "SX-Pft", EOrderAction.BuyToCover, OrderExit.FromAll));
+
+            Output.Clear();
         }
 
         double UpperLine, LowerLine;
         double LELine, SELine;
         double OnePip;
         int CorridorCondition;
-        Orders LE, SE;
+        Orders LP, SE;
         protected override void StartCalc()
         {
             ADRf.TimePeriod = 5;
@@ -86,13 +88,16 @@ namespace PowerLanguage.Strategy
             double oneTick = Bars.Info.BigPointValue / Bars.Info.PriceScale;
             OnePip = oneTick * 10;
 
-            LE = new Orders(EMarketPositionSide.Long);
-            SE = new Orders(EMarketPositionSide.Short);
+            // long and short position orders
+            LP = new Orders(EMarketPositionSide.Long, this);
+            SE = new Orders(EMarketPositionSide.Short, this);
         }
 
         protected override void CalcBar()
         {
             int mp = StrategyInfo.MarketPosition;
+            SE.Call();
+            LP.Call();
 
             StrategyLogic(mp);
 
@@ -103,30 +108,31 @@ namespace PowerLanguage.Strategy
 
             if (mp > 0)
             {
-                LXStp.Send(LE.StopLossPrice, LE.Quantity);
-                PrintStrategyOrders(LE, PrintLines.StopLoss);
+                LXStp.Send(LP.StopLossPrice, LP.Quantity);
+                LP.PrintStopLossOrder();
 
-                LXLmt.Send(LE.ProfitPrice, LE.Quantity);
-                PrintStrategyOrders(LE, PrintLines.Profit);
+                LXLmt.Send(LP.ProfitPrice, LP.Quantity);
+                LP.PrintProfitTargetOrder();
             }
+          
+            LP.PrintDebug(7190);
         }
 
         private void SendEntries(int mp)
         {
             if (CorridorCondition > 0 && mp == 0)
             {
-                LE.EntryPrice = LELine;
-                LE.Quantity = 100000;
-                LE.StopLossPrice = LowerLine;
-                LE.RiskValue = LELine - LowerLine;
-                LE.ProfitPrice = 
-                    LE.EntryPrice + (ProfitTargetRatio * LE.RiskValue);
-                LE.State = Send.LongEntryOrders;
+                LP.EntryPrice = LELine;
+                LP.Quantity = 100000;
+                LP.StopLossPrice = LowerLine;
+                LP.RiskValue = LELine - LowerLine;
+                LP.ProfitPrice =
+                    LP.EntryPrice + (ProfitTargetRatio * LP.RiskValue);
+                LP.State = Send.LongEntryOrders;
 
-                LEStp.Send(LE.EntryPrice, LE.Quantity);
+                LEStp.Send(LP.EntryPrice, LP.Quantity);
 
-                PrintStrategyOrders(LE, PrintLines.Entry);
-
+                LP.PrintEntryOrder();
                 //SE.EntryPrice = SELine;
                 //SE.Quantity = 100000;
                 //SE.StopLossPrice = UpperLine;
@@ -149,9 +155,9 @@ namespace PowerLanguage.Strategy
         private void SendLongExits(int mp)
         {
             // order filled
-            if (mp > 0 && LE.State == Send.LongEntryOrders)
+            if (mp > 0 && LP.State == Send.LongEntryOrders)
             {
-                LE.State = Send.LongExitOrders;
+                LP.State = Send.LongExitOrders;
                 SE.Reset();
             }
 
@@ -280,173 +286,259 @@ namespace PowerLanguage.Strategy
                 Bars.CurrentBarAbsolute() + 1, message);
         }
 
-        private bool PrintStrategyOrders(string text, double price, Color color, bool printOnce)
-        {
-            if (Environment.Optimizing) return false;
-            if (Bars.Status != EBarState.Close) return printOnce;
-
-            ChartPoint point = new ChartPoint(Bars.Time[0], price);
-            ITextObject order = DrwText.Create(point, "-");
-            order.Color = color;
-
-            // print line text only once
-            if (printOnce == false)
-            {
-                double onePip = (Bars.Info.BigPointValue / Bars.Info.PriceScale) * 10;
-
-                point.Price = price + (2 * onePip);
-                ITextObject txt = DrwText.Create(point, text);
-                txt.Color = color;
-
-                printOnce = true;
-            }
-
-            return printOnce;
-        }
-
-        private void PrintStrategyOrders(string text, double price, Color color, ref bool printOnce)
-        {
-
-            if (Environment.Optimizing ||
-                Bars.Status != EBarState.Close) return;
-
-            ChartPoint point = new ChartPoint(Bars.Time[0], price);
-            ITextObject order = DrwText.Create(point, "-");
-            order.Color = color;
-
-            // print line text only once
-            if (printOnce == false)
-            {
-                double onePip = (Bars.Info.BigPointValue / Bars.Info.PriceScale) * 10;
-
-                point.Price = price + (2 * onePip);
-                ITextObject txt = DrwText.Create(point, text);
-                txt.Color = color;
-
-                printOnce = true;
-            }
-        }
-
-        private void PrintStrategyOrders(Orders order, PrintLines type)
-        {
-            if (Environment.Optimizing ||
-                Bars.Status != EBarState.Close) return;
-
-            // declare local variables
-            double price = 0;
-            Color color = Color.Black;
-            bool printed = false;
-            string text = "";
-
-            switch (type)
-            {
-                case PrintLines.Entry:
-                    {
-                        price = order.EntryPrice;
-                        printed = order.PrintEP;
-                        text = "EP";
-
-                        if (order.Direction == EMarketPositionSide.Long)
-                            color = Color.LimeGreen;
-
-                        if (order.Direction == EMarketPositionSide.Short)
-                            color = Color.Red;
-                    }
-                    break;
-
-                case PrintLines.StopLoss:
-                    {
-                        price = order.StopLossPrice;
-                        color = Color.Yellow;
-                        printed = order.PrintSL;
-                        text = "SL";
-                    }
-                    break;
-
-                case PrintLines.Profit:
-                    {
-                        price = order.ProfitPrice;
-                        color = Color.Cyan;
-                        printed = order.PrintPT;
-                        text = "PT";
-                    }
-                    break;
-            }
-       
-            ChartPoint point = new ChartPoint(Bars.Time[0], price);
-            ITextObject line = DrwText.Create(point, "-");
-            line.Color = color;
-
-            // print line text only once
-            if (printed == false)
-            {
-                double onePip = (Bars.Info.BigPointValue / Bars.Info.PriceScale) * 10;
-
-                point.Price = price + (2 * onePip);
-                ITextObject txt = DrwText.Create(point, text);
-                txt.Color = color;
-
-                if (type == PrintLines.Entry)
-                    order.PrintEP = true;
-                else if (type == PrintLines.StopLoss)
-                    order.PrintSL = true;
-                else if (type == PrintLines.Profit)
-                    order.PrintPT = true;
-            }
-        }
-
-        private void PrintStrategyOrders(double price, Color color)
-        {
-            if (Environment.Optimizing) return;
-
-            ChartPoint point = new ChartPoint(Bars.Time[0], price);
-            ITextObject order = DrwText.Create(point, "-");
-            order.Color = color;
-        }
         #endregion
 
-        #region State
+        #region Order State
         enum Send
         {
-            ShortExitOrders = -2, ShortEntryOrders = -1, 
+            ShortExitOrders = -2, ShortEntryOrders = -1,
             NoOrders, LongEntryOrders, LongExitOrders
-        }
-        enum PrintLines
-        {
-            Entry, StopLoss, Profit
         }
         class Orders
         {
-            // framework
+            // properties
             public double EntryPrice { get; set; }
             public double StopLossPrice { get; set; }
             public double ProfitPrice { get; set; }
             public double RiskValue { get; set; }
-            public EMarketPositionSide Direction { get; set; }
-            public double MoveStopToBreakeven { get; set; }
 
             public int Quantity { get; set; }
             public int TimeInForce { get; set; }
 
-            public bool PrintEP { get; set; }
-            public bool PrintSL { get; set; }
-            public bool PrintPT { get; set; }
-            public bool PrintBE { get; set; }
-            public bool SaveOnce { get; set; }
-
-            // custom
             public Send State { get; set; }
 
-            public Orders(EMarketPositionSide direction)
-            { Direction = direction; }
-
+            // reset object state
             public void Reset()
             {
                 RiskValue = EntryPrice = StopLossPrice = ProfitPrice = 0;
                 Quantity = TimeInForce = 0;
-                SaveOnce = PrintEP = PrintSL = PrintPT = PrintBE = false;
-                State = Send.NoOrders;
+                PrintEP = PrintSL = PrintPT = false;
             }
+
+            // fields
+            readonly int[] MP = new int[3];
+            readonly CStudyControl Control;
+            readonly EMarketPositionSide Direction;
+
+            bool PrintEP, PrintSL, PrintPT;
+            public Orders(EMarketPositionSide direction, CStudyControl control)
+            {
+                Direction = direction;
+                Control = control;
+            }
+
+            public void Call()
+            {
+                // NON-IOG, called once per bar.
+                // IOG, called once per tick.
+                Shift(MP.Length, MP);
+                MP[0] = Control.StrategyInfo.MarketPosition;
+
+                if (Direction == EMarketPositionSide.Long)
+                {
+                    if (MP[0] <= 0 && MP[1] > 0)
+                        PrintEP = PrintSL = PrintPT = false;
+                }
+                else if (Direction == EMarketPositionSide.Short)
+                {
+                    if (MP[0] >= 0 && MP[1] < 0)
+                        PrintEP = PrintSL = PrintPT = false;
+                }
+            }
+           
+            private void Shift(int period, int[] data)
+            {
+                if (period > 1)
+                {
+                    data[period - 1] = data[period - 2];
+                    Shift(period - 1, data);
+                }
+            }
+
+            #region Print
+            public void PrintEntryOrder()
+            {
+                IInstrument bars = Control.Bars;
+
+                if (Control.Environment.Optimizing ||
+                    Control.Bars.Status != EBarState.Close ||
+                    StopLossPrice <= 0) return;
+
+                // declare local variables
+                double price = EntryPrice;
+                Color color;
+
+                if (Direction == EMarketPositionSide.Long)
+                    color = Color.LimeGreen;
+                else if (Direction == EMarketPositionSide.Short)
+                    color = Color.Red;
+
+                // default
+                else color = Color.Black;
+
+                ChartPoint point = new ChartPoint(bars.Time[0], price);
+                ITextObject line = Control.DrwText.Create(point, "-");
+                line.Color = color;
+
+                // print line text only once
+                if (PrintEP == false)
+                {
+                    IInstrumentSettings barInfo = Control.Bars.Info;
+                    double onePip = (barInfo.BigPointValue / barInfo.PriceScale) * 10;
+
+                    point.Price = price + (2 * onePip);
+                    ITextObject txt = Control.DrwText.Create(point, "EP");
+                    txt.Color = color;
+
+                    PrintEP = true;
+                }
+            }
+
+            public void PrintStopLossOrder()
+            {
+                IInstrument bars = Control.Bars;
+
+                if (Control.Environment.Optimizing ||
+                    bars.Status != EBarState.Close ||
+                    StopLossPrice <= 0) return;
+
+                // declare local variables
+                double price = StopLossPrice;
+                Color color = Color.Yellow;
+
+                ChartPoint point = new ChartPoint(bars.Time[0], price);
+                ITextObject line = Control.DrwText.Create(point, "-");
+                line.Color = color;
+
+                // print line text only once
+                if (PrintSL == false)
+                {
+                    IInstrumentSettings barInfo = Control.Bars.Info;
+                    double onePip = (barInfo.BigPointValue / barInfo.PriceScale) * 10;
+
+                    point.Price = price - (3 * onePip);
+                    ITextObject txt = Control.DrwText.Create(point, "SL");
+                    txt.Color = color;
+
+                    PrintSL = true;
+                }
+            }
+
+            public void PrintProfitTargetOrder()
+            {
+                IInstrument bars = Control.Bars;
+
+                if (Control.Environment.Optimizing ||
+                    bars.Status != EBarState.Close ||
+                    ProfitPrice <= 0) return;
+
+                // declare local variables
+                double price = ProfitPrice;
+                Color color = Color.Cyan;
+
+                ChartPoint point = new ChartPoint(bars.Time[0], price);
+                ITextObject line = Control.DrwText.Create(point, "-");
+                line.Color = color;
+
+                // print line text only once
+                if (PrintPT == false)
+                {
+                    IInstrumentSettings barInfo = Control.Bars.Info;
+                    double onePip = (barInfo.BigPointValue / barInfo.PriceScale) * 10;
+
+                    point.Price = price + (2 * onePip);
+                    ITextObject txt = Control.DrwText.Create(point, "PT");
+                    txt.Color = color;
+
+                    PrintPT = true;
+                }
+            }
+
+            private void Print(string message)
+            {
+                // print messages if debug mode == true.
+                // disabled during optimisation
+                if (Control.Environment.Optimizing) return;
+
+                // Print who is calling Print()
+                StackTrace stackTrace = new StackTrace();
+
+                Control.Output.WriteLine(
+                    "Project:  {0}   |   Caller:  {1}   |   Bar Time:  {2}  |   Bar No.:  {3}  |   Message:  {4}",
+                    Control.Name, stackTrace.GetFrame(1).GetMethod().Name,
+                    Control.Bars.TimeValue.ToString("dd-MM-yy HH:mm:ss tt"),
+                    Control.Bars.CurrentBarAbsolute() + 1, message);
+            }
+
+            private void Print(string message, int barNum)
+            {
+                // print messages if debug mode == true.
+                // disabled during optimisation
+                if (Control.Environment.Optimizing ||
+                   (Control.Bars.CurrentBarAbsolute() + 1) != barNum)
+                    return;
+
+                // Print who is calling Print()
+                StackTrace stackTrace = new StackTrace();
+
+                Control.Output.WriteLine(
+                    "Project:  {0}   |   Caller:  {1}   |   Bar Time:  {2}  |   Bar No.:  {3}  |   Message:  {4}",
+                    Control.Name, stackTrace.GetFrame(1).GetMethod().Name,
+                    Control.Bars.TimeValue.ToString("dd-MM-yy HH:mm:ss tt"),
+                    Control.Bars.CurrentBarAbsolute() + 1, message);
+            }
+
+            public void PrintDebug()
+            {
+                if (Control.Environment.Optimizing)
+                    return;
+
+                Control.Output.WriteLine("");
+
+                Print("State: " + State);
+                Print("Direction: " + Direction);
+                Print("Market Position: " + MP[0]);
+                Print("Market Position[1]: " + MP[1]);
+                Print("Bar Time: " + Control.Bars.Time[0].
+                    ToString("dd-MM-yyyy HH:mm:ss tt"));
+
+                Print("Entry Price: " + EntryPrice);
+                Print("StopLoss Price: " + StopLossPrice);
+                Print("Profit Price: " + ProfitPrice);
+                Print("Risk Value: " + RiskValue);
+                Print("Quantity: " + Quantity);
+                Print("Time In Force: " + TimeInForce);
+
+                Control.Output.WriteLine("");
+            }
+
+            public void PrintDebug(int barNum)
+            {
+                if (Control.Environment.Optimizing ||
+                  (Control.Bars.CurrentBarAbsolute() + 1) != barNum)
+                    return;
+
+                Control.Output.WriteLine("");
+
+                Print("State: " + State, barNum);
+                Print("Direction: " + Direction, barNum);
+                Print("Market Position: " + MP[0], barNum);
+                Print("Market Position[1]: " + MP[1], barNum);
+                Print("Bar Time: " + Control.Bars.Time[0].
+                    ToString("dd-MM-yyyy HH:mm:ss tt"), barNum);
+
+                Print("Entry Price: " + EntryPrice, barNum);
+                Print("StopLoss Price: " + StopLossPrice, barNum);
+                Print("Profit Price: " + ProfitPrice, barNum);
+                Print("Risk Value: " + RiskValue, barNum);
+                Print("Quantity: " + Quantity, barNum);
+                Print("Time In Force: " + TimeInForce, barNum);
+
+                Control.Output.WriteLine("");
+            }
+
+            #endregion
+
         }
         #endregion
 
