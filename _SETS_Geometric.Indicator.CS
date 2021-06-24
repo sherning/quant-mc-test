@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using System.Drawing;
 using System.Linq;
+using System.Collections.Generic;
 using PowerLanguage.Function;
 
 namespace PowerLanguage.Indicator
@@ -34,14 +35,19 @@ namespace PowerLanguage.Indicator
         }
 
         SETSGeometricDrawings Box;
+        BoxCoordinates[] BoxCoordinatesArr;
         protected override void Create()
         {
             Box = new SETSGeometricDrawings(this);
+
+            // last 5 box coordinates
+            BoxCoordinatesArr = new BoxCoordinates[5];
 
             Output.Clear();
         }
         protected override void StartCalc()
         {
+           
         }
         protected override void CalcBar()
         {
@@ -59,8 +65,6 @@ namespace PowerLanguage.Indicator
             //ChartPoint midRight, midLeft;
 
             int maxBars = ExecInfo.MaxBarsBack;
-
-            Print("MaxBars: " + maxBars);
 
             topRight = new ChartPoint(7125 - maxBars, 1.2040);
             topLeft = new ChartPoint(7077 - maxBars, 1.2040);
@@ -80,14 +84,39 @@ namespace PowerLanguage.Indicator
         }
         #endregion
 
-        #region Functions
+        #region Functions 
+        private void DrawBox(BoxCoordinates box)
+        {
 
+        }
+
+        private void Shift(BoxCoordinates[] arr, int length)
+        {
+            // newest data from index 0
+            if (length > 1)
+            {
+                arr[length - 1] = arr[length - 2];
+                Shift(arr, length - 1);
+            }
+        }
         #endregion
 
         #region Data Structure
         struct BoxCoordinates
-        { 
-        
+        {
+            public ChartPoint UpperLeft { get; set; }
+            public ChartPoint UpperRight { get; set; }
+            public ChartPoint LowerLeft { get; set; }
+            public ChartPoint LowerRight { get; set; }
+
+            public ITrendLineObject TopLine { get; set; }
+            public ITrendLineObject BottomLine { get; set; }
+            public ITrendLineObject RightLine { get; set; }
+            public ITrendLineObject LeftLine { get; set; }
+
+            public ITrendLineObject LeftDiagonal { get; set; }
+            public ITrendLineObject RightDiagonal { get; set; }
+
         }
 
         #endregion
