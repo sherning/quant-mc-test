@@ -183,4 +183,3 @@ namespace PowerLanguage.Strategy
         }
     }
 }
-

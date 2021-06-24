@@ -80,7 +80,7 @@ namespace PowerLanguage.Strategy
         double LELine, SELine;
         double OnePip;
         int CorridorCondition;
-        Orders LP, SE;
+        PositionInfo LP, SP;
         protected override void StartCalc()
         {
             ADRf.TimePeriod = 5;
@@ -89,81 +89,26 @@ namespace PowerLanguage.Strategy
             OnePip = oneTick * 10;
 
             // long and short position orders
-            LP = new Orders(EMarketPositionSide.Long, this);
-            SE = new Orders(EMarketPositionSide.Short, this);
+            LP = new PositionInfo(EMarketPositionSide.Long, this);
+            SP = new PositionInfo(EMarketPositionSide.Short, this);
         }
 
         protected override void CalcBar()
         {
             int mp = StrategyInfo.MarketPosition;
-            SE.Call();
+            SP.Call();
             LP.Call();
 
+            // swap when necessary 
             StrategyLogic(mp);
 
             // entry
             SendEntries(mp);
 
             // exits
-
-            if (mp > 0)
-            {
-                LXStp.Send(LP.StopLossPrice, LP.Quantity);
-                LP.PrintStopLossOrder();
-
-                LXLmt.Send(LP.ProfitPrice, LP.Quantity);
-                LP.PrintProfitTargetOrder();
-            }
-          
-            LP.PrintDebug(7190);
+            SendExits(mp);
         }
 
-        private void SendEntries(int mp)
-        {
-            if (CorridorCondition > 0 && mp == 0)
-            {
-                LP.EntryPrice = LELine;
-                LP.Quantity = 100000;
-                LP.StopLossPrice = LowerLine;
-                LP.RiskValue = LELine - LowerLine;
-                LP.ProfitPrice =
-                    LP.EntryPrice + (ProfitTargetRatio * LP.RiskValue);
-                LP.State = Send.LongEntryOrders;
-
-                LEStp.Send(LP.EntryPrice, LP.Quantity);
-
-                LP.PrintEntryOrder();
-                //SE.EntryPrice = SELine;
-                //SE.Quantity = 100000;
-                //SE.StopLossPrice = UpperLine;
-                //SE.RiskValue = UpperLine - SELine;
-                //SE.ProfitPrice =
-                //    SE.EntryPrice - (ProfitTargetRatio * SE.RiskValue);
-                //SE.State = Send.ShortEntryOrders;
-
-                //SEStp.Send(SE.EntryPrice, SE.Quantity);
-
-                //PrintStrategyOrders("SE-Stp", SE, PrintLines.Entry);
-            }
-            //else
-            //{
-            //    LE.Reset();
-            //    SE.Reset();
-            //}
-        }
-
-        private void SendLongExits(int mp)
-        {
-            // order filled
-            if (mp > 0 && LP.State == Send.LongEntryOrders)
-            {
-                LP.State = Send.LongExitOrders;
-                SE.Reset();
-            }
-
-        }
-
-        #region Strategy Logic
         private void StrategyLogic(int mp)
         {
             double upperLine = UpperFractal(NumOfBarsAroundFractal);
@@ -204,24 +149,85 @@ namespace PowerLanguage.Strategy
             StrategyInfo.SetPlotValue(4, SELine);
         }
 
-        private double HighestHigh(int period)
+        private void SendEntries(int mp)
         {
-            double high = 0;
+            // conditions for double break
+            if (CorridorCondition > 0 && mp == 0)
+            {
+                if (Bars.High[0] <= LP.EntryPrice)
+                {
+                    // long entry info
+                    LP.EntryPrice = LELine;
+                    LP.Quantity = 100000;
+                    LP.StopLossPrice = LowerLine;
+                    LP.RiskValue = LELine - LowerLine;
+                    LP.ProfitPrice =
+                        LP.EntryPrice + (ProfitTargetRatio * LP.RiskValue);
+                    LP.State = Send.LongEntryOrders;
 
-            // bar close
-            for (int i = 0; i < period; i++)
-                high = Math.Max(high, Bars.High[i]);
+                    LEStp.Send(LP.EntryPrice, LP.Quantity);
+                    LP.PrintEntryOrder();
+                }
 
-            return high;
+                if (Bars.Low[0] >= SP.EntryPrice)
+                {
+                    // short entry info
+                    SP.EntryPrice = SELine;
+                    SP.Quantity = 100000;
+                    SP.StopLossPrice = UpperLine;
+                    SP.RiskValue = UpperLine - SELine;
+                    SP.ProfitPrice =
+                        SP.EntryPrice - (ProfitTargetRatio * SP.RiskValue);
+                    SP.State = Send.ShortEntryOrders;
+
+                    SEStp.Send(SP.EntryPrice, SP.Quantity);
+                    SP.PrintEntryOrder();
+                }
+            }
         }
 
-        private double LowestLow(int period)
+        private void SendExits(int mp)
         {
-            double low = double.MaxValue;
-            for (int i = 0; i < period; i++)
-                low = Math.Min(low, Bars.Low[i]);
+            // order filled
+            if (mp > 0 && LP.State == Send.LongEntryOrders)
+            {
+                LP.State = Send.LongExitOrders;
+                SP.Reset();
+            }
+            else if (mp < 0 && SP.State == Send.ShortEntryOrders)
+            {
+                SP.State = Send.ShortExitOrders;
+                LP.Reset();
+            }
 
-            return low;
+            // exit logic
+            if (LP.State == Send.LongExitOrders)
+            {
+                if (mp > 0)
+                {
+                    LXStp.Send(LP.StopLossPrice, LP.Quantity);
+                    LP.PrintStopLossOrder();
+
+                    LXLmt.Send(LP.ProfitPrice, LP.Quantity);
+                    LP.PrintProfitTargetOrder();
+                }
+                else
+                    LP.Reset();
+            }
+
+            if (SP.State == Send.ShortExitOrders)
+            {
+                if (mp < 0)
+                {
+                    SXStp.Send(SP.StopLossPrice, SP.Quantity);
+                    SP.PrintStopLossOrder();
+
+                    SXLmt.Send(SP.ProfitPrice, SP.Quantity);
+                    SP.PrintProfitTargetOrder();
+                }
+                else
+                    SP.Reset();
+            }
         }
 
         private double UpperFractal(int period)
@@ -249,7 +255,6 @@ namespace PowerLanguage.Strategy
 
             return pivot;
         }
-        #endregion
 
         #region Print
         private void Print(string message)
@@ -288,15 +293,29 @@ namespace PowerLanguage.Strategy
 
         #endregion
 
-        #region Order State
+        #region Strategy Framework Pack - Position Info
         enum Send
         {
             ShortExitOrders = -2, ShortEntryOrders = -1,
             NoOrders, LongEntryOrders, LongExitOrders
         }
-        class Orders
+        class PositionInfo
         {
-            // properties
+            //================================= Project Documentation =================================
+            // Project Name : Strategy Framework Pack - Position Info
+            // Class Type   : Regular
+            // Date Created : 20 May 2021
+            // Version      : v1.0.0
+            // Developer    : Sher Ning
+            //=========================================================================================
+            // Objectives   : Data container that prints order information (Both IOG / non-IOG)
+            // Remarks      : Requires Send Enum
+            //=========================================================================================
+            // Copyright    : 2021, Sher Ning Technologies           
+            // Client       : Sher Ning
+            // Contact      : sherning@hotmail.com
+            //=========================================================================================
+
             public double EntryPrice { get; set; }
             public double StopLossPrice { get; set; }
             public double ProfitPrice { get; set; }
@@ -321,7 +340,7 @@ namespace PowerLanguage.Strategy
             readonly EMarketPositionSide Direction;
 
             bool PrintEP, PrintSL, PrintPT;
-            public Orders(EMarketPositionSide direction, CStudyControl control)
+            public PositionInfo(EMarketPositionSide direction, CStudyControl control)
             {
                 Direction = direction;
                 Control = control;
@@ -540,6 +559,10 @@ namespace PowerLanguage.Strategy
             #endregion
 
         }
+        #endregion
+
+        #region Strategy Framework Pack - AutoPositionSizing
+
         #endregion
 
     }

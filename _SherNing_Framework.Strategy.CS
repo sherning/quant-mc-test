@@ -27,7 +27,7 @@ namespace PowerLanguage.Strategy
         //=========================================================================================
         // References   : 
         // Obectives    : Test different functions for tracking strategy orders
-        // Remarks      : 
+        // Remarks      : Legacy Code (use class Orders)
         //=========================================================================================
 
         public _SherNing_Framework(object _ctx) : base(_ctx) { }

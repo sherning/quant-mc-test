@@ -338,6 +338,7 @@
     <Compile Include="_SherNing_PAL_Corridor.Indicator.CS" />
     <Compile Include="_ST_Patterns_60.Strategy.CS" />
     <Compile Include="_ST_Patterns_602.Strategy.CS" />
+    <Compile Include="_SETS_Geometric.Indicator.CS" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
